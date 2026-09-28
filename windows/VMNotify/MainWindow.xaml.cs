@@ -87,9 +87,10 @@ public partial class MainWindow : Window
             if (!ReferenceEquals(displayed, receiver.AvailableApps)) RenderApps(receiver.AvailableApps);
             if ((DateTime.UtcNow - lastNotification).TotalSeconds >= 5 && receiver.Notifications.Reader.TryRead(out var ev)) {
                 if (receiver.IsEnabled(ev.AppId!)) {
-                    LastNotification.Text = $"{ev.AppName} 有待查看的消息  ·  {DateTime.Now:HH:mm}";
+                    var message = $"虚拟机 {saved.Host} 中的{ev.AppName}有新消息。";
+                    LastNotification.Text = $"{message}  ·  {DateTime.Now:HH:mm}";
                     Diagnostics.Write("Notification dequeued: " + ev.AppId);
-                    ShowNotification("VMNotify · " + ev.AppName, "虚拟机中的应用正在提醒你查看消息。");
+                    ShowNotification("VMNotify · " + ev.AppName, message);
                 }
                 lastNotification = DateTime.UtcNow;
             }
