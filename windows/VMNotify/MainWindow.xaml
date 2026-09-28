@@ -234,9 +234,9 @@
                 </Grid>
             </ScrollViewer>
             <Grid x:Name="ConnectionFooter" Grid.Row="2" Margin="0,18,0,0" Visibility="Collapsed">
-                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                <Button x:Name="SaveConnect" Style="{StaticResource Primary}" Content="保存并连接" Click="ConnectClicked"/>
-                <TextBlock Grid.Column="1" Text="首次连接前，请完成密钥登录并核对主机指纹。" Style="{StaticResource Secondary}" VerticalAlignment="Center" Margin="16,0,0,0"/>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock Text="首次连接前，请完成密钥登录并核对主机指纹。" Style="{StaticResource Secondary}" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                <Button x:Name="SaveConnect" Grid.Column="1" HorizontalAlignment="Right" Style="{StaticResource Primary}" Content="保存并连接" Click="ConnectClicked"/>
             </Grid>
         </Grid>
     </Grid>
