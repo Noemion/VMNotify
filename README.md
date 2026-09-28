@@ -9,6 +9,7 @@ Forward application attention events from Linux virtual machines to your Windows
 - **Linux 采集端：Rust**。通过桌面会话 D-Bus 检测受支持应用，输出有版本号的 JSON Lines 事件。
 - **Windows 接收端：C# / .NET 10 WPF**。参照 WSL Settings 的分栏设置界面，支持托盘通知、SSH 重连、应用开关、配置保存、可选登录启动。
 - **系统主题与滚动**：跟随 Windows 应用浅色/深色主题，运行中自动切换；滚动条默认隐藏，滚动时显示细条，停止约 1 秒后淡出，并且不挤占内容宽度。
+- **窗口与图标**：一体化标题栏保留最小化、最大化/还原、关闭按钮，以及原生拖动、双击最大化和边缘缩放。程序、安装包、任务栏、标题栏和托盘使用同一套 16–256 像素多分辨率图标。关闭窗口后继续在托盘运行。
 - **应用发现**：每约 5 秒扫描受支持应用；向宿主机提供已安装/正在监听的应用列表。新发现的应用不会自动开启转发，默认只开启蓝信。
 - **当前内置适配器只有蓝信**，依据托盘连续闪烁判断“需要关注”，不读取聊天内容，也不统计消息条数。支持其他应用需要适配与验证，不能因为应用出现在进程列表就保证能转发。
 - Windows x86、x64、ARM64 各提供自包含 EXE 安装程序和 Portable ZIP。无需安装 .NET 运行时；仍需 Windows OpenSSH 客户端。
@@ -85,6 +86,8 @@ dotnet run --project windows/VMNotify.Tests -c Release
 dotnet build windows/VMNotify/VMNotify.csproj -c Release
 # 需要 Inno Setup 7.1；输出默认为 artifacts/
 ./scripts/package-windows.ps1 -Iscc 'C:\path\to\ISCC.exe'
+# 修改图标绘制代码后，重新生成多分辨率 ICO 与预览 PNG
+dotnet run --project tools/VMNotify.IconBuilder -c Release -- windows/VMNotify/Assets
 ```
 
 Linux 本机可使用 `cargo build --release --locked`。Windows 上 Rust 的 `--demo` 和单元测试可运行，真实采集必须在 Linux 运行。

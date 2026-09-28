@@ -4,6 +4,10 @@
     <UseWindowsForms>true</UseWindowsForms><UseWPF>true</UseWPF><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
     <Version>0.1.0</Version><ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>VMNotify</AssemblyName>
+    <ApplicationIcon>Assets/VMNotify.ico</ApplicationIcon>
+    <!-- WPF owns startup and manifest DPI settings; WinForms is only used for the tray icon. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../VMNotify.Core/VMNotify.Core.csproj" /></ItemGroup>
+  <ItemGroup><Resource Include="Assets/VMNotify.ico" /></ItemGroup>
 </Project>

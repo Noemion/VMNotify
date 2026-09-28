@@ -31,6 +31,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\VMNotify.exe
+SetupIconFile=..\windows\VMNotify\Assets\VMNotify.ico
 CloseApplications=yes
 RestartApplications=no
 

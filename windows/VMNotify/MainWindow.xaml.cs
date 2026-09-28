@@ -7,6 +7,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using System.Windows.Media.Animation;
 using System.Windows.Interop;
+using System.Runtime.InteropServices;
 using ScrollBar = System.Windows.Controls.Primitives.ScrollBar;
 using Microsoft.Win32;
 using WpfMessageBox = System.Windows.MessageBox;
@@ -25,6 +26,7 @@ public partial class MainWindow : Window
 {
     private readonly Receiver receiver = new();
     private readonly System.Windows.Forms.NotifyIcon tray;
+    private readonly System.Drawing.Icon trayIcon;
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer scrollIdle = new() { Interval = TimeSpan.FromMilliseconds(1000) };
     private ScrollBar? overlayBar;
@@ -58,7 +60,9 @@ public partial class MainWindow : Window
         };
         bool portable = File.Exists(Path.Combine(AppContext.BaseDirectory, "portable.marker"));
         settingsFile = Path.Combine(portable ? AppContext.BaseDirectory : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VMNotify"), "settings.json");
-        tray = new() { Icon = System.Drawing.SystemIcons.Information, Text = "VMNotify", Visible = !preview };
+        using (var stream = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/Assets/VMNotify.ico")).Stream)
+        using (var loadedIcon = new System.Drawing.Icon(stream, 32, 32)) trayIcon = (System.Drawing.Icon)loadedIcon.Clone();
+        tray = new() { Icon = trayIcon, Text = "VMNotify", Visible = !preview };
         var menu = new System.Windows.Forms.ContextMenuStrip();
         menu.Items.Add("打开 VMNotify", null, (_, _) => Dispatcher.Invoke(ShowWindow));
         menu.Items.Add("退出", null, (_, _) => Dispatcher.InvokeAsync(async () => { quitting = true; await Stop(); Close(); }));
@@ -89,14 +93,28 @@ public partial class MainWindow : Window
         Loaded += async (_, _) => { if (!preview && saved.AutoConnect && saved.Host.Length > 0) await Connect(); };
         Closing += (_, e) => { if (!quitting) { e.Cancel = true; Hide(); } };
         Closed += (_, _) => {
-            timer.Stop(); scrollIdle.Stop(); cancellation?.Cancel(); tray.Dispose();
+            timer.Stop(); scrollIdle.Stop(); cancellation?.Cancel(); tray.Dispose(); trayIcon.Dispose();
             if (!preview) SystemEvents.UserPreferenceChanged -= ThemeChanged;
             windowSource?.RemoveHook(WindowMessage);
         };
         if (preview) { Opacity = 0; ShowInTaskbar = false; }
+        StateChanged += (_, _) => {
+            bool maximized = WindowState == WindowState.Maximized;
+            MaximizeButton.Content = maximized ? "\uE923" : "\uE922";
+            MaximizeButton.ToolTip = maximized ? "还原" : "最大化";
+        };
     }
 
     private void ShowWindow() { Show(); WindowState = WindowState.Normal; Activate(); }
+    private void MinimizeClicked(object sender, RoutedEventArgs e) => SystemCommands.MinimizeWindow(this);
+    private void MaximizeClicked(object sender, RoutedEventArgs e) {
+        if (WindowState == WindowState.Maximized) SystemCommands.RestoreWindow(this);
+        else SystemCommands.MaximizeWindow(this);
+    }
+    private void CloseClicked(object sender, RoutedEventArgs e) => SystemCommands.CloseWindow(this);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
     private void SelectPage(int index)
     {
         if (OverviewPage == null) return;
@@ -252,7 +270,26 @@ public partial class MainWindow : Window
         await Task.Delay(1400);
         if (overlayBar.Opacity > .01) throw new InvalidOperationException("Scrollbar did not fade after scrolling");
         Capture("scroll-faded");
-        File.WriteAllText(Path.Combine(directory, "ui-checks.txt"), "PASS: light/dark palettes, page rendering, hidden idle scrollbar, visible while scrolling, fade after idle, no layout shift.");
+        // Exercise the actual caption button handlers and native chrome hit testing.
+        void Click(System.Windows.Controls.Button button) => button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        int HitTest(double x, double y) {
+            var point = Root.PointToScreen(new System.Windows.Point(x, y));
+            long packed = (ushort)(int)point.X | ((long)(ushort)(int)point.Y << 16);
+            return (int)SendMessage(new WindowInteropHelper(this).Handle, 0x0084, IntPtr.Zero, new IntPtr(unchecked((int)packed)));
+        }
+        if (HitTest(500, 20) != 2) throw new InvalidOperationException("Title bar is not draggable");
+        if (HitTest(Root.ActualWidth - 1, 100) != 11) throw new InvalidOperationException("Window edge is not resizable");
+        Click(MaximizeButton); await Task.Delay(150);
+        if (WindowState != WindowState.Maximized || (string)MaximizeButton.Content != "\uE923") throw new InvalidOperationException("Maximize button failed");
+        Click(MaximizeButton); await Task.Delay(150);
+        if (WindowState != WindowState.Normal) throw new InvalidOperationException("Restore button failed");
+        Click(MinimizeButton); await Task.Delay(150);
+        if (WindowState != WindowState.Minimized) throw new InvalidOperationException("Minimize button failed");
+        SystemCommands.RestoreWindow(this); await Task.Delay(150);
+        Click(CloseButton); await Task.Delay(150);
+        if (IsVisible) throw new InvalidOperationException("Close button did not hide window to tray");
+        Show();
+        File.WriteAllText(Path.Combine(directory, "ui-checks.txt"), "PASS: light/dark palettes, page rendering, hidden idle scrollbar, visible while scrolling, fade after idle, no layout shift, caption drag hit test, edge resize hit test, maximize/restore/minimize/close buttons.");
     }
     internal void QuitForPreview() { quitting = true; Close(); }
 }

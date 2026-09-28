@@ -3,9 +3,27 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="VMNotify" Width="1280" Height="800" MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen" Background="{DynamicResource WindowBackground}"
+        WindowStyle="None" ResizeMode="CanResize" Icon="Assets/VMNotify.ico"
         FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="14" Foreground="{DynamicResource MainText}"
         UseLayoutRounding="True" SnapsToDevicePixels="True">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="40" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="8" UseAeroCaptionButtons="False"/>
+    </WindowChrome.WindowChrome>
     <Window.Resources>
+        <Style x:Key="CaptionButton" TargetType="Button">
+            <Setter Property="Width" Value="46"/><Setter Property="Height" Value="40"/>
+            <Setter Property="Foreground" Value="{DynamicResource MainText}"/><Setter Property="Background" Value="Transparent"/>
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/><Setter Property="FontSize" Value="10"/>
+            <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+                <Border x:Name="Face" Background="{TemplateBinding Background}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Face" Property="Background" Value="{DynamicResource NavHover}"/></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Face" Property="Background" Value="{DynamicResource NavSelected}"/></Trigger>
+                    <MultiTrigger><MultiTrigger.Conditions><Condition Property="Tag" Value="Close"/><Condition Property="IsMouseOver" Value="True"/></MultiTrigger.Conditions><Setter TargetName="Face" Property="Background" Value="#C42B1C"/><Setter Property="Foreground" Value="White"/></MultiTrigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
         <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /><Setter Property="FontSize" Value="16"/></Style>
         <Style x:Key="Secondary" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource Muted}"/><Setter Property="FontSize" Value="14"/>
@@ -119,8 +137,20 @@
     </Window.Resources>
 
     <Grid x:Name="Root" Background="{DynamicResource WindowBackground}">
+        <Grid.RowDefinitions><RowDefinition Height="40"/><RowDefinition Height="*"/></Grid.RowDefinitions>
         <Grid.ColumnDefinitions><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-        <Grid Margin="0,12,0,16">
+        <Grid Grid.Row="0" Grid.ColumnSpan="2" Background="{DynamicResource WindowBackground}">
+            <StackPanel Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
+                <Image Source="Assets/VMNotify.ico" Width="18" Height="18" RenderOptions.BitmapScalingMode="HighQuality"/>
+                <TextBlock Text="VMNotify" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="MinimizeButton" Style="{StaticResource CaptionButton}" Content="&#xE921;" ToolTip="最小化" AutomationProperties.Name="最小化" Click="MinimizeClicked"/>
+                <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButton}" Content="&#xE922;" ToolTip="最大化" AutomationProperties.Name="最大化或还原" Click="MaximizeClicked"/>
+                <Button x:Name="CloseButton" Style="{StaticResource CaptionButton}" Content="&#xE8BB;" Tag="Close" ToolTip="关闭窗口，继续在托盘运行" AutomationProperties.Name="关闭" Click="CloseClicked"/>
+            </StackPanel>
+        </Grid>
+        <Grid Grid.Row="1" Margin="0,12,0,16">
             <Grid.RowDefinitions><RowDefinition Height="0"/><RowDefinition Height="*"/><RowDefinition Height="90"/></Grid.RowDefinitions>
             <StackPanel Margin="24,16,16,0" Visibility="Collapsed">
                 <StackPanel Orientation="Horizontal">
@@ -140,7 +170,7 @@
             </StackPanel>
         </Grid>
 
-        <Grid Grid.Column="1" Margin="16,12,24,12">
+        <Grid Grid.Row="1" Grid.Column="1" Margin="16,12,24,12">
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <StackPanel Margin="0,0,0,18">
                 <TextBlock x:Name="PageTitle" Text="概览" FontSize="24"/>
