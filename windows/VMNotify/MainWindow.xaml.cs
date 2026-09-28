@@ -27,7 +27,7 @@ public partial class MainWindow : Window
     private readonly Receiver receiver = new();
     private readonly System.Windows.Forms.NotifyIcon tray;
     private readonly System.Drawing.Icon trayIcon;
-    private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(200) };
     private readonly DispatcherTimer scrollIdle = new() { Interval = TimeSpan.FromMilliseconds(1000) };
     private ScrollBar? overlayBar;
     private DateTime suppressScrollUntil;
@@ -39,8 +39,11 @@ public partial class MainWindow : Window
     private AvailableApp[]? displayed;
     private CancellationTokenSource? cancellation;
     private Task running = Task.CompletedTask;
-    private DateTime lastNotification = DateTime.MinValue;
     private bool quitting, busy;
+    private bool loaded;
+    private DateTime? pausedWindow;
+    private DateTime scheduleRetryAfter;
+    private string scheduleStatus = "";
 
     public MainWindow(bool preview = false)
     {
@@ -78,27 +81,38 @@ public partial class MainWindow : Window
         saved = saved with { Host = saved.Host ?? "", User = saved.User ?? "", IdentityFile = saved.IdentityFile ?? "", AgentPath = saved.AgentPath ?? ".local/bin/vmnotify-agent", EnabledApps = saved.EnabledApps ?? [] };
         HostInput.Text = saved.Host; UserInput.Text = saved.User; PortInput.Text = saved.Port.ToString();
         IdentityInput.Text = saved.IdentityFile; AgentInput.Text = saved.AgentPath; AutoConnectInput.IsChecked = saved.AutoConnect;
+        ScheduleInput.IsChecked = saved.ScheduleEnabled;
+        ConnectTimeInput.Text = saved.ConnectTime;
+        DisconnectTimeInput.Text = saved.DisconnectTime;
         enabled = new(saved.EnabledApps); receiver.SetEnabledApps(enabled.ToArray());
         using (var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
             StartupInput.IsChecked = string.Equals(key?.GetValue("VMNotify") as string, StartupCommand(), StringComparison.OrdinalIgnoreCase);
         OverviewNav.IsChecked = true; RefreshStatus();
-        timer.Tick += (_, _) => {
+        timer.Tick += async (_, _) => {
+            await EvaluateSchedule();
+            if (busy || quitting) return;
             RefreshStatus();
+            receiver.QueueReminders();
             if (!ReferenceEquals(displayed, receiver.AvailableApps)) RenderApps(receiver.AvailableApps);
-            if ((DateTime.UtcNow - lastNotification).TotalSeconds >= 5 && receiver.Notifications.Reader.TryRead(out var ev)) {
-                if (receiver.IsEnabled(ev.AppId!)) {
+            if (receiver.Notifications.Reader.TryRead(out var ev)) {
+                if (receiver.ShouldDisplay(ev)) {
                     var message = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "zh"
-                        ? $"虚拟机【{saved.Host}】中的【{ev.AppName}】有新消息。"
-                        : $"New message from [{ev.AppName}] on virtual machine [{saved.Host}].";
+                        ? ev.Kind == "reminder" ? $"虚拟机【{saved.Host}】中的【{ev.AppName}】仍有待查看的消息。" : $"虚拟机【{saved.Host}】中的【{ev.AppName}】有新消息。"
+                        : ev.Kind == "reminder" ? $"Messages still need attention in [{ev.AppName}] on virtual machine [{saved.Host}]." : $"New message from [{ev.AppName}] on virtual machine [{saved.Host}].";
                     LastNotification.Text = $"{message}  ·  {DateTime.Now:HH:mm}";
                     Diagnostics.Write("Notification dequeued: " + ev.AppId);
                     ShowNotification("VMNotify · " + ev.AppName, message);
+                    receiver.MarkDelivered(ev);
                 }
-                lastNotification = DateTime.UtcNow;
             }
         };
         if (!preview) timer.Start();
-        Loaded += async (_, _) => { if (!preview && saved.AutoConnect && saved.Host.Length > 0) await Connect(); };
+        Loaded += async (_, _) => {
+            loaded = true;
+            if (preview) return;
+            if (saved.ScheduleEnabled) await EvaluateSchedule();
+            else if (saved.AutoConnect && saved.Host.Length > 0) await Connect();
+        };
         Closing += (_, e) => { if (!quitting) { e.Cancel = true; Hide(); } };
         Closed += (_, _) => {
             updateLifetime.Cancel(); updateClient.Dispose();
@@ -153,7 +167,14 @@ public partial class MainWindow : Window
     private void TestClicked(object sender, RoutedEventArgs e) => ShowNotification("VMNotify", "这是一条本机测试通知。虚拟机连接需单独验证。");
     private void BrowseKeyClicked(object sender, RoutedEventArgs e) { var dialog = new Microsoft.Win32.OpenFileDialog { Title = "选择 SSH 私钥", CheckFileExists = true }; if (dialog.ShowDialog(this) == true) IdentityInput.Text = dialog.FileName; }
     private async void ConnectClicked(object sender, RoutedEventArgs e) => await Connect();
-    private async void DisconnectClicked(object sender, RoutedEventArgs e) => await Stop();
+    private async void DisconnectClicked(object sender, RoutedEventArgs e) {
+        if (busy) return;
+        busy = true;
+        try {
+            if (saved.ScheduleEnabled) pausedWindow = DailySchedule.Parse(saved.ConnectTime, saved.DisconnectTime).WindowStart(DateTime.Now);
+            await Stop();
+        } finally { busy = false; }
+    }
     private async void QuickConnectClicked(object sender, RoutedEventArgs e) { if (string.IsNullOrWhiteSpace(HostInput.Text)) SelectPage(1); else await Connect(); }
 
     private void RenderApps(AvailableApp[] apps)
@@ -174,8 +195,9 @@ public partial class MainWindow : Window
     private void RefreshStatus()
     {
         bool connected = receiver.Status.StartsWith("已连接");
+        ScheduleStatusText.Text = scheduleStatus;
         StatusTitle.Text = connected ? "正在接收虚拟机提醒" : receiver.Status.StartsWith("正在") ? "正在连接虚拟机" : "连接你的虚拟机";
-        StatusDetail.Text = receiver.Status is "未连接" or "已断开" ? "开始连接后，你选择的应用会在这台电脑上显示提醒。" : receiver.Status;
+        StatusDetail.Text = receiver.Status is "未连接" or "已断开" ? saved.ScheduleEnabled ? scheduleStatus : "开始连接后，你选择的应用会在这台电脑上显示提醒。" : receiver.Status;
         StatusIcon.Text = connected ? "\uE73E" : "\uE8D7";
         tray.Text = "VMNotify · " + (connected ? "已连接" : "未连接");
         HostSummary.Text = saved.Host.Length == 0 ? "尚未配置" : saved.Host;
@@ -196,15 +218,41 @@ public partial class MainWindow : Window
         try {
             if (!int.TryParse(PortInput.Text, out var port)) throw new ArgumentException("SSH 端口必须是数字");
             var cfg = new Settings { Host = HostInput.Text.Trim(), User = UserInput.Text.Trim(), Port = port,
-                IdentityFile = IdentityInput.Text.Trim(), AgentPath = AgentInput.Text.Trim(), AutoConnect = AutoConnectInput.IsChecked == true, EnabledApps = enabled.ToArray() };
+                IdentityFile = IdentityInput.Text.Trim(), AgentPath = AgentInput.Text.Trim(), AutoConnect = AutoConnectInput.IsChecked == true, EnabledApps = enabled.ToArray(),
+                ScheduleEnabled = ScheduleInput.IsChecked == true, ConnectTime = ConnectTimeInput.Text.Trim(), DisconnectTime = DisconnectTimeInput.Text.Trim() };
             cfg.Validate(); Receiver.SshPath(); saved = cfg; SaveSettings();
             using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run")) {
                 if (StartupInput.IsChecked == true) key.SetValue("VMNotify", StartupCommand()); else key.DeleteValue("VMNotify", false);
             }
             await Stop(); if (quitting) return;
-            cancellation = new(); running = receiver.Run(cfg, cancellation.Token); SelectPage(0);
+            pausedWindow = null; scheduleRetryAfter = DateTime.MinValue;
+            if (!cfg.ScheduleEnabled) scheduleStatus = "";
+            if (!cfg.ScheduleEnabled || DailySchedule.Parse(cfg.ConnectTime, cfg.DisconnectTime).WindowStart(DateTime.Now) != null) {
+                cancellation = new(); running = receiver.Run(cfg, cancellation.Token);
+            } else scheduleStatus = $"等待每日 {cfg.ConnectTime} 自动连接（本机时间）";
+            SelectPage(0);
         } catch (Exception ex) { WpfMessageBox.Show(this, ex.Message, "VMNotify", MessageBoxButton.OK, MessageBoxImage.Warning); }
         finally { busy = false; SaveConnect.IsEnabled = QuickConnect.IsEnabled = true; RefreshStatus(); }
+    }
+
+    private async Task EvaluateSchedule()
+    {
+        if (!loaded || previewMode || busy || quitting || !saved.ScheduleEnabled) return;
+        busy = true;
+        try {
+            var now = DateTime.Now;
+            var window = DailySchedule.Parse(saved.ConnectTime, saved.DisconnectTime).WindowStart(now);
+            scheduleStatus = window == null ? $"等待每日 {saved.ConnectTime} 自动连接（本机时间）"
+                : pausedWindow == window ? "本时段已手动断开，下个时段自动连接"
+                : $"每日 {saved.ConnectTime}–{saved.DisconnectTime} 连接（本机时间）";
+            if (window == null) { if (cancellation != null) await Stop(); return; }
+            if (pausedWindow == window || cancellation != null || now < scheduleRetryAfter) return;
+            saved.Validate(); Receiver.SshPath();
+            cancellation = new(); running = receiver.Run(saved, cancellation.Token);
+        } catch (Exception ex) {
+            scheduleStatus = "定时连接配置有误：" + ex.Message;
+            scheduleRetryAfter = DateTime.Now.AddMinutes(1);
+        } finally { busy = false; }
     }
     private async Task Stop()
     {
@@ -279,6 +327,12 @@ public partial class MainWindow : Window
             for (int i = 0; i < names.Length; i++) {
                 SelectPage(i); UpdateLayout(); await Task.Delay(150); HideScrollbarImmediately();
                 Capture(names[i] + (light ? "-light" : "-dark"));
+                if (i == 1) {
+                    ScheduleInput.IsChecked = true;
+                    PageScroll.ScrollToEnd(); UpdateLayout(); await Task.Delay(150); HideScrollbarImmediately();
+                    Capture("schedule" + (light ? "-light" : "-dark"));
+                    ScheduleInput.IsChecked = false;
+                }
             }
         }
         SystemTheme.Apply(this, false); Height = 620; SelectPage(1); UpdateLayout();

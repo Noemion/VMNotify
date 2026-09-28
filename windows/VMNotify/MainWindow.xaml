@@ -236,9 +236,22 @@
                         <Border Style="{StaticResource Card}"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel Margin="0,0,20,0" VerticalAlignment="Center"><TextBlock Text="登录 Windows 时启动"/><TextBlock Text="登录当前 Windows 账户后运行 VMNotify。" Style="{StaticResource Secondary}"/></StackPanel><CheckBox x:Name="StartupInput" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="登录 Windows 后启动"/>
                         </Grid></Border>
+                        <Border Style="{StaticResource Card}"><StackPanel>
+                            <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,20,0"><TextBlock Text="每天定时连接"/><TextBlock Text="按 Windows 本机时间连接和断开，支持跨午夜。开启后优先于启动自动连接；程序需在托盘运行。" Style="{StaticResource Secondary}"/></StackPanel>
+                                <CheckBox x:Name="ScheduleInput" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="每天定时连接"/>
+                            </Grid>
+                            <WrapPanel Margin="0,14,0,0" IsEnabled="{Binding IsChecked, ElementName=ScheduleInput}">
+                                <TextBlock Text="连接时间" VerticalAlignment="Center" Margin="0,0,10,0"/><TextBox x:Name="ConnectTimeInput" Width="85" MaxLength="5" AutomationProperties.Name="连接时间 HH:mm"/>
+                                <TextBlock Text="断开时间" VerticalAlignment="Center" Margin="22,0,10,0"/><TextBox x:Name="DisconnectTimeInput" Width="85" MaxLength="5" AutomationProperties.Name="断开时间 HH:mm"/>
+                            </WrapPanel>
+                            <TextBlock Text="时间格式 HH:mm；修改后点击右下角“保存并连接”。手动断开后，本时段不再自动连接。" Style="{StaticResource Secondary}" Margin="0,10,0,0"/>
+                            <TextBlock x:Name="ScheduleStatusText" Style="{StaticResource Secondary}"/>
+                        </StackPanel></Border>
                     </StackPanel>
 
                     <StackPanel x:Name="AppsPage" Visibility="Collapsed">
+                        <TextBlock Text="应用持续闪烁时，每 5 分钟重复提醒；停止闪烁后停止提醒。" Style="{StaticResource Secondary}" Margin="0,0,0,12"/>
                         <Border Style="{StaticResource Card}" Background="{DynamicResource InfoBackground}" Margin="0,0,0,18">
                             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="30"/><ColumnDefinition/></Grid.ColumnDefinitions>
                                 <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" Foreground="{DynamicResource Accent}" FontSize="17" VerticalAlignment="Center"/>

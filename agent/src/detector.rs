@@ -23,13 +23,13 @@ impl Detector {
         }
         if self
             .first
-            .is_none_or(|t| now.duration_since(t) > Duration::from_millis(2200))
+            .is_none_or(|t| now.duration_since(t) > Duration::from_millis(1100))
         {
             self.first = Some(now);
             self.count = 0;
         }
         self.count += 1;
-        if self.count >= 4 {
+        if self.count >= 2 {
             self.active = true;
             return true;
         }
@@ -39,7 +39,7 @@ impl Detector {
     pub fn tick(&mut self, now: Instant) -> bool {
         if self
             .last
-            .is_some_and(|t| now.duration_since(t) >= Duration::from_secs(3))
+            .is_some_and(|t| now.duration_since(t) >= Duration::from_millis(1250))
         {
             let was_active = self.active;
             *self = Self::default();
@@ -57,14 +57,14 @@ mod tests {
         let start = Instant::now();
         let mut d = Detector::default();
         for i in 0..20 {
-            assert_eq!(d.pulse(start + Duration::from_millis(i * 500)), i == 3);
+            assert_eq!(d.pulse(start + Duration::from_millis(i * 500)), i == 1);
         }
-        assert!(!d.tick(start + Duration::from_secs(12)));
-        assert!(d.tick(start + Duration::from_secs(13)));
-        for i in 0..4 {
+        assert!(!d.tick(start + Duration::from_millis(10749)));
+        assert!(d.tick(start + Duration::from_millis(10750)));
+        for i in 0..2 {
             assert_eq!(
                 d.pulse(start + Duration::from_millis(14000 + i * 500)),
-                i == 3
+                i == 1
             );
         }
     }

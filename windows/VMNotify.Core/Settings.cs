@@ -11,9 +11,13 @@ public sealed record Settings
     public string AgentPath { get; init; } = ".local/bin/vmnotify-agent";
     public bool AutoConnect { get; init; } = true;
     public string[] EnabledApps { get; init; } = [];
+    public bool ScheduleEnabled { get; init; }
+    public string ConnectTime { get; init; } = "09:00";
+    public string DisconnectTime { get; init; } = "18:00";
 
     public void Validate()
     {
+        if (ScheduleEnabled) _ = DailySchedule.Parse(ConnectTime, DisconnectTime);
         if (!Regex.IsMatch(Host, @"\A[a-zA-Z0-9][a-zA-Z0-9.:%_-]{0,252}\z") || Host.Contains('\n'))
             throw new ArgumentException("主机填写 IP 或主机名，不包含用户名或空格");
         if (!Regex.IsMatch(User, @"\A[a-zA-Z_][a-zA-Z0-9_.-]{0,63}\z")) throw new ArgumentException("无效的 SSH 用户名");

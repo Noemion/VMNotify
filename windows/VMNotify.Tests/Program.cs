@@ -23,9 +23,10 @@ if (args.Length == 4 && args[0] == "--ssh-names") {
     return;
 }
 
-if (args.Length == 4 && args[0] is "--ssh" or "--ssh-muted") {
+if (args.Length == 4 && args[0] is "--ssh" or "--ssh-muted" or "--ssh-reminder") {
     bool muted = args[0] == "--ssh-muted";
-    var receiver = new Receiver();
+    var clock = new TimingTests.Clock();
+    var receiver = new Receiver(clock);
     receiver.SetEnabledApps(muted ? [] : ["lanxin"]);
     using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(25));
     var running = receiver.Run(new Settings { Host = args[1], User = args[2], AgentPath = args[3] }, stop.Token);
@@ -40,7 +41,15 @@ if (args.Length == 4 && args[0] is "--ssh" or "--ssh-muted") {
             while (receiver.Notifications.Reader.TryRead(out var ev)) {
                 Console.WriteLine("NOTIFICATION: " + ev.AppId); attention = true;
             }
-            if (found && (muted ? elapsed.Elapsed.TotalSeconds >= 7 : attention)) break;
+            if (found && (muted ? elapsed.Elapsed.TotalSeconds >= 7 : attention)) {
+                if (args[0] == "--ssh-reminder") {
+                    clock.Advance(TimeSpan.FromMinutes(5)); receiver.QueueReminders();
+                    if (!receiver.Notifications.Reader.TryRead(out var reminder) || reminder.Kind != "reminder" || !receiver.ShouldDisplay(reminder))
+                        throw new Exception("Actual SSH attention did not produce timed reminder");
+                    Console.WriteLine("PASS: live SSH attention produces five-minute reminder with simulated elapsed time.");
+                }
+                break;
+            }
             await Task.Delay(100, stop.Token);
         }
     } catch (OperationCanceledException) { }
@@ -95,3 +104,4 @@ foreach (var input in new[] { new string('x', 32769), "truncated" }) {
 }
 Console.WriteLine("All protocol, framing and SSH argument tests passed.");
 await UpdateTests.Run();
+TimingTests.Run();

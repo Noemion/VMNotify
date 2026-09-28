@@ -10,7 +10,30 @@ internal sealed class Receiver
     public readonly Channel<AgentEvent> Notifications = Channel.CreateBounded<AgentEvent>(
         new BoundedChannelOptions(32) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true, SingleWriter = false });
     private readonly object selectionLock = new();
-    private readonly Dictionary<string, AgentEvent> activeAlerts = new();
+    private sealed class Alert(AgentEvent ev, long now) {
+        public AgentEvent Original = ev;
+        public AgentEvent Pending = ev;
+        public long LastQueued = now;
+    }
+    private readonly Dictionary<string, Alert> activeAlerts = new();
+    private readonly TimeProvider clock;
+    public Receiver(TimeProvider? clock = null) { this.clock = clock ?? TimeProvider.System; }
+    public void QueueReminders() {
+        lock (selectionLock) {
+            foreach (var alert in activeAlerts.Values) {
+                if (!IsEnabled(alert.Original.AppId!) || clock.GetElapsedTime(alert.LastQueued) < TimeSpan.FromMinutes(5)) continue;
+                alert.Pending = alert.Original with { Kind = "reminder" };
+                alert.LastQueued = clock.GetTimestamp();
+                Notifications.Writer.TryWrite(alert.Pending);
+            }
+        }
+    }
+    public bool ShouldDisplay(AgentEvent ev) {
+        lock (selectionLock) return IsEnabled(ev.AppId!) && activeAlerts.TryGetValue(ev.AppId!, out var alert) && ReferenceEquals(alert.Pending, ev);
+    }
+    public void MarkDelivered(AgentEvent ev) {
+        lock (selectionLock) if (activeAlerts.TryGetValue(ev.AppId!, out var alert) && ReferenceEquals(alert.Pending, ev)) alert.LastQueued = clock.GetTimestamp();
+    }
     private string status = "未连接";
     private AvailableApp[] availableApps = [];
     private string[] enabledApps = [];
@@ -22,7 +45,11 @@ internal sealed class Receiver
             var previous = enabledApps;
             Volatile.Write(ref enabledApps, ids.Distinct().ToArray());
             foreach (var id in enabledApps.Except(previous))
-                if (activeAlerts.TryGetValue(id, out var alert)) Notifications.Writer.TryWrite(alert);
+                if (activeAlerts.TryGetValue(id, out var alert)) {
+                    alert.Pending = alert.Original with { };
+                    alert.LastQueued = clock.GetTimestamp();
+                    Notifications.Writer.TryWrite(alert.Pending);
+                }
         }
     }
     internal void ApplyAttention(AgentEvent ev)
@@ -30,7 +57,7 @@ internal sealed class Receiver
         lock (selectionLock)
         {
             if (ev.Kind == "cleared") { activeAlerts.Remove(ev.AppId!); return; }
-            if (!activeAlerts.TryAdd(ev.AppId!, ev)) return;
+            if (!activeAlerts.TryAdd(ev.AppId!, new Alert(ev, clock.GetTimestamp()))) return;
             if (activeAlerts.Count > 64) throw new InvalidDataException("代理发送了过多应用");
             if (IsEnabled(ev.AppId!)) Notifications.Writer.TryWrite(ev);
         }
