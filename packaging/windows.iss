@@ -32,7 +32,8 @@ SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\VMNotify.exe
 SetupIconFile=..\windows\VMNotify\Assets\VMNotify.ico
-CloseApplications=yes
+; Older tray builds can refuse graceful Restart Manager shutdown.
+CloseApplications=force
 RestartApplications=no
 LanguageDetectionMethod=uilanguage
 ShowLanguageDialog=no
@@ -78,6 +79,41 @@ Filename: "{app}\VMNotify.exe"; Description: "{cm:LaunchApp}"; Flags: nowait pos
 [Code]
 var RestoreStartupAfterMove: Boolean;
 
+procedure StopInstalledApp;
+var Locator, Services, Processes, Process: Variant; I, Attempt: Integer;
+    OldPath, TargetPath, ExePath: String; Found: Boolean;
+begin
+  TargetPath := AddBackslash(ExpandConstant('{app}')) + 'VMNotify.exe';
+  OldPath := '';
+  if not RegQueryStringValue(HKCU32, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\VMNotify_is1', 'InstallLocation', OldPath) then
+    if IsWin64 then
+      RegQueryStringValue(HKCU64, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\VMNotify_is1', 'InstallLocation', OldPath);
+  if OldPath <> '' then OldPath := AddBackslash(OldPath) + 'VMNotify.exe';
+  Locator := CreateOleObject('WbemScripting.SWbemLocator');
+  Services := Locator.ConnectServer('.', 'root\cimv2');
+  for Attempt := 0 to 50 do begin
+    Found := False;
+    Processes := Services.ExecQuery('SELECT * FROM Win32_Process WHERE Name = ''VMNotify.exe''');
+    for I := 0 to Processes.Count - 1 do begin
+      Process := Processes.ItemIndex(I);
+      if not VarIsNull(Process.ExecutablePath) then begin
+        ExePath := Process.ExecutablePath;
+        if (CompareText(ExePath, TargetPath) = 0) or
+           ((OldPath <> '') and (CompareText(ExePath, OldPath) = 0)) then begin
+          Found := True;
+          if Attempt = 0 then begin
+            Log('Closing installed VMNotify: ' + ExePath);
+            if Process.Terminate(0) <> 0 then RaiseException(CustomMessage('MoveFailed'));
+          end;
+        end;
+      end;
+    end;
+    if not Found then Exit;
+    Sleep(100);
+  end;
+  RaiseException(CustomMessage('MoveFailed'));
+end;
+
 function RemovePreviousLocation: Boolean;
 var OldPath, Uninstaller, StartupValue: String; RootKey: Integer; ExitCode: Integer;
 begin
@@ -105,9 +141,11 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if CurStep = ssInstall then
+  if CurStep = ssInstall then begin
+    StopInstalledApp;
     if not RemovePreviousLocation then
       RaiseException(CustomMessage('MoveFailed'));
+  end;
   if (CurStep = ssPostInstall) and RestoreStartupAfterMove then
     RegWriteStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'VMNotify', '"' + ExpandConstant('{app}\VMNotify.exe') + '"');
 end;

@@ -213,6 +213,17 @@ public partial class MainWindow : Window
     private void ThemeChanged(object sender, UserPreferenceChangedEventArgs e) => Dispatcher.BeginInvoke(() => SystemTheme.Apply(this, SystemTheme.IsLight()));
     private IntPtr WindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        // Restart Manager uses session shutdown messages, even without logging off.
+        if (msg == 0x0011) { // WM_QUERYENDSESSION: allow shutdown, but not yet exit.
+            handled = true;
+            return new IntPtr(1);
+        }
+        if (msg == 0x0016 && wParam != IntPtr.Zero) { // WM_ENDSESSION confirmed.
+            quitting = true;
+            cancellation?.Cancel();
+            Dispatcher.BeginInvoke(async () => { await Stop(); Close(); });
+            handled = true;
+        }
         if (msg == 0x001A && !previewMode) SystemTheme.Apply(this, SystemTheme.IsLight());
         return IntPtr.Zero;
     }
