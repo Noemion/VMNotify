@@ -366,6 +366,11 @@ public partial class MainWindow : Window
         Directory.CreateDirectory(directory);
         // Preview data is illustrative, never saved or connected to a real machine.
         HostInput.Text = "192.0.2.10"; UserInput.Text = "desktop-user";
+        DownloadedPackages.ItemsSource = new[] {
+            new DownloadedUpdate("0.2.7", "VMNotify-0.2.7-win-x64-setup.exe", "", 0),
+            new DownloadedUpdate("0.2.6", "VMNotify-0.2.6-win-x64-setup.exe", "", 0)
+        };
+        NoDownloads.Visibility = Visibility.Collapsed;
         RenderApps([new("lanxin", "蓝信", true, "status-notifier-flash", "attention-only", true),
             new("auto-preview", "自动发现的应用", true, "status-notifier-auto", "attention-only")]);
         StatusTitle.Text = "正在接收虚拟机提醒"; StatusDetail.Text = "已连接。应用提醒会自动转发到这台电脑。";
@@ -389,6 +394,22 @@ public partial class MainWindow : Window
             for (int i = 0; i < names.Length; i++) {
                 SelectPage(i); UpdateLayout(); await Task.Delay(150); HideScrollbarImmediately();
                 Capture(names[i] + (light ? "-light" : "-dark"));
+                if (i == 3) {
+                    foreach (var previewWidth in new[] { 1024d, 900d }) {
+                        Width = previewWidth; UpdateLayout();
+                        PageScroll.ScrollToEnd(); UpdateLayout(); ShowScrollbar(); await Task.Delay(150);
+                        var row = (System.Windows.Controls.ContentPresenter)DownloadedPackages.ItemContainerGenerator.ContainerFromIndex(0);
+                        var delete = (FrameworkElement)row.ContentTemplate.FindName("PackageDeleteButton", row);
+                        double Right(FrameworkElement element) => element.TranslatePoint(new System.Windows.Point(element.ActualWidth, 0), Root).X;
+                        if (Math.Abs(Right(ClearDownloadsButton) - Right(delete)) > 1)
+                            throw new InvalidOperationException("Bulk delete is not aligned with package actions");
+                        double barLeft = overlayBar!.TranslatePoint(new System.Windows.Point(0, 0), Root).X;
+                        if (Root.ActualWidth - Right(overlayBar) > 8 || barLeft <= Right(AboutPage))
+                            throw new InvalidOperationException("Scrollbar must be near the window edge and outside page content");
+                        Capture($"about-downloads-{previewWidth}" + (light ? "-light" : "-dark"));
+                    }
+                    Width = 1024; UpdateLayout();
+                }
                 if (i == 4) {
                     ScheduleInput.IsChecked = true;
                     PageScroll.ScrollToEnd(); UpdateLayout(); await Task.Delay(150); HideScrollbarImmediately();
