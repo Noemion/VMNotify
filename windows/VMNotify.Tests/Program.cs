@@ -43,10 +43,10 @@ if (args.Length == 4 && args[0] is "--ssh" or "--ssh-muted" or "--ssh-reminder")
             }
             if (found && (muted ? elapsed.Elapsed.TotalSeconds >= 7 : attention)) {
                 if (args[0] == "--ssh-reminder") {
-                    clock.Advance(TimeSpan.FromMinutes(5)); receiver.QueueReminders();
+                    clock.Advance(TimeSpan.FromMinutes(3)); receiver.QueueReminders();
                     if (!receiver.Notifications.Reader.TryRead(out var reminder) || reminder.Kind != "reminder" || !receiver.ShouldDisplay(reminder))
                         throw new Exception("Actual SSH attention did not produce timed reminder");
-                    Console.WriteLine("PASS: live SSH attention produces five-minute reminder with simulated elapsed time.");
+                    Console.WriteLine("PASS: live SSH attention produces three-minute reminder with simulated elapsed time.");
                 }
                 break;
             }

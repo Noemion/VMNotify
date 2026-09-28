@@ -30,21 +30,21 @@ internal static class TimingTests
         r.SetEnabledApps(["lanxin"]); r.ApplyAttention(ev);
         Check(r.Notifications.Reader.TryRead(out var initial) && r.ShouldDisplay(initial), "initial notification");
         r.MarkDelivered(initial!);
-        clock.Advance(TimeSpan.FromSeconds(299)); r.QueueReminders();
+        clock.Advance(TimeSpan.FromMilliseconds(179999)); r.QueueReminders();
         Check(!r.Notifications.Reader.TryRead(out _), "no early repeat");
-        clock.Advance(TimeSpan.FromSeconds(1)); r.QueueReminders();
-        Check(r.Notifications.Reader.TryRead(out var repeat) && repeat.Kind == "reminder" && r.ShouldDisplay(repeat), "five minute repeat");
+        clock.Advance(TimeSpan.FromMilliseconds(1)); r.QueueReminders();
+        Check(r.Notifications.Reader.TryRead(out var repeat) && repeat.Kind == "reminder" && r.ShouldDisplay(repeat), "three minute repeat");
         r.MarkDelivered(repeat!); r.QueueReminders();
         Check(!r.Notifications.Reader.TryRead(out _), "no duplicate on next tick");
-        clock.Advance(TimeSpan.FromMinutes(5)); r.QueueReminders();
+        clock.Advance(TimeSpan.FromMinutes(3)); r.QueueReminders();
         Check(r.Notifications.Reader.TryRead(out var stale), "second repeat");
         r.ApplyAttention(ev with { Kind = "cleared" });
         Check(!r.ShouldDisplay(stale!), "queued repeat invalid after cleared");
         clock.Advance(TimeSpan.FromMinutes(10)); r.QueueReminders();
         Check(!r.Notifications.Reader.TryRead(out _), "no repeats after cleared");
         r.ApplyAttention(ev); r.Notifications.Reader.TryRead(out _); r.SetEnabledApps([]);
-        clock.Advance(TimeSpan.FromMinutes(5)); r.QueueReminders();
+        clock.Advance(TimeSpan.FromMinutes(3)); r.QueueReminders();
         Check(!r.Notifications.Reader.TryRead(out _), "disabled app no repeats");
-        Console.WriteLine("PASS: daily/overnight schedules and five-minute reminder timing, cancellation and opt-out.");
+        Console.WriteLine("PASS: daily/overnight schedules and three-minute reminder timing, cancellation and opt-out.");
     }
 }

@@ -21,7 +21,7 @@ internal sealed class Receiver
     public void QueueReminders() {
         lock (selectionLock) {
             foreach (var alert in activeAlerts.Values) {
-                if (!IsEnabled(alert.Original.AppId!) || clock.GetElapsedTime(alert.LastQueued) < TimeSpan.FromMinutes(5)) continue;
+                if (!IsEnabled(alert.Original.AppId!) || clock.GetElapsedTime(alert.LastQueued) < TimeSpan.FromMinutes(3)) continue;
                 alert.Pending = alert.Original with { Kind = "reminder" };
                 alert.LastQueued = clock.GetTimestamp();
                 Notifications.Writer.TryWrite(alert.Pending);

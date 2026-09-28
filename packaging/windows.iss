@@ -38,7 +38,7 @@ RestartApplications=no
 LanguageDetectionMethod=uilanguage
 ShowLanguageDialog=no
 UsePreviousLanguage=no
-DisableWelcomePage=yes
+DisableWelcomePage=no
 DisableDirPage=no
 DisableProgramGroupPage=no
 DisableReadyPage=no
@@ -47,15 +47,15 @@ DisableReadyPage=no
 Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
+[Messages]
+english.WelcomeLabel1=Welcome to VMNotify
+chinesesimplified.WelcomeLabel1=欢迎安装 VMNotify
+english.WelcomeLabel2=Receive message alerts from supported apps in your Linux virtual machine on Windows, without switching windows.%n%nConnect over SSH, discover apps, and choose which notifications to forward.%n%nSettings are saved automatically. VMNotify runs in the tray and supports reconnecting and scheduled connections.%n%nInstall the Linux agent before connecting. Windows requires .NET Desktop Runtime 10.0 and the OpenSSH client.%n%nNext, choose the installation folder and Start Menu folder, then confirm installation.
+chinesesimplified.WelcomeLabel2=将 Linux 虚拟机中受支持应用的消息提醒转发到 Windows，无需切换窗口。%n%n通过 SSH 连接虚拟机，自动发现应用，自主选择要转发的通知。%n%n自动保存设置，支持托盘后台运行、断线重连和定时连接。%n%n使用前需安装 Linux 采集端；Windows 端需要 .NET Desktop Runtime 10.0 和 OpenSSH 客户端。%n%n接下来选择安装路径和开始菜单名称，再确认安装。
+
 [CustomMessages]
 english.MoveFailed=The previous installation could not be removed. Close VMNotify and try again. Your saved connection settings are retained.
 chinesesimplified.MoveFailed=无法移除旧版安装。请退出 VMNotify 后重试。已保存的连接配置会保留。
-english.IntroductionTitle=Welcome to VMNotify
-chinesesimplified.IntroductionTitle=欢迎使用 VMNotify
-english.IntroductionDescription=Message alerts from your virtual machine, on your Windows desktop.
-chinesesimplified.IntroductionDescription=虚拟机里的消息，Windows 上及时获知。
-english.AppIntroduction=Receive alerts from your Linux virtual machine on Windows,%nwithout switching windows.%n%nFEATURES%n  - Discover supported apps and choose which can notify you.%n  - Save settings automatically and reconnect when needed.%n  - Keep running in the tray; follow the Windows theme.%n%nGET STARTED%nInstall the Linux agent, connect over SSH, then select apps.%n%nREQUIREMENTS%n.NET Desktop Runtime 10.0 and Windows OpenSSH client.
-chinesesimplified.AppIntroduction=将 Linux 虚拟机中受支持应用的消息提醒转发到 Windows，%n无需切换窗口，即可及时获知新消息。%n%n主要功能%n  · 自动发现受支持应用，按需开启消息提醒。%n  · 自动保存设置，支持断线重连。%n  · 托盘后台运行，跟随系统浅色或深色主题。%n%n开始使用%n安装 Linux 采集端 → 配置 SSH 连接 → 选择提醒应用。%n%n运行环境%n.NET Desktop Runtime 10.0 和 Windows OpenSSH 客户端。
 english.UninstallApp=Uninstall VMNotify
 chinesesimplified.UninstallApp=卸载 VMNotify
 english.LaunchApp=Launch VMNotify
@@ -151,20 +151,7 @@ begin
 end;
 
 procedure InitializeWizard;
-var IntroductionPage: TWizardPage; IntroductionText: TNewStaticText; IntroductionFrame: TBevel;
 begin
-  IntroductionPage := CreateCustomPage(wpWelcome,
-    CustomMessage('IntroductionTitle'), CustomMessage('IntroductionDescription'));
-  IntroductionFrame := TBevel.Create(WizardForm);
-  IntroductionFrame.Parent := IntroductionPage.Surface;
-  IntroductionFrame.Shape := bsFrame;
-  IntroductionFrame.SetBounds(0, 0, IntroductionPage.SurfaceWidth, IntroductionPage.SurfaceHeight);
-  IntroductionText := TNewStaticText.Create(WizardForm);
-  IntroductionText.Parent := IntroductionPage.Surface;
-  IntroductionText.AutoSize := False;
-  IntroductionText.SetBounds(ScaleX(12), ScaleY(16), IntroductionPage.SurfaceWidth - ScaleX(24), IntroductionPage.SurfaceHeight - ScaleY(28));
-  IntroductionText.WordWrap := True;
-  IntroductionText.Caption := CustomMessage('AppIntroduction');
   WizardForm.ReadyMemo.Color := clWhite;
   WizardForm.ReadyMemo.BorderStyle := bsNone;
   WizardForm.ReadyMemo.ScrollBars := ssNone;
