@@ -45,6 +45,7 @@ public partial class MainWindow : Window
     public MainWindow(bool preview = false)
     {
         previewMode = preview;
+        if (!preview) Diagnostics.Write("Application started");
         InitializeComponent();
         SystemTheme.Apply(this, SystemTheme.IsLight());
         SourceInitialized += (_, _) => {
@@ -83,8 +84,9 @@ public partial class MainWindow : Window
             if (!ReferenceEquals(displayed, receiver.AvailableApps)) RenderApps(receiver.AvailableApps);
             if ((DateTime.UtcNow - lastNotification).TotalSeconds >= 5 && receiver.Notifications.Reader.TryRead(out var ev)) {
                 if (receiver.IsEnabled(ev.AppId!)) {
-                    tray.ShowBalloonTip(5000, "VMNotify · " + ev.AppName, "虚拟机中的应用正在提醒你查看消息。", System.Windows.Forms.ToolTipIcon.Info);
                     LastNotification.Text = $"{ev.AppName} 有待查看的消息  ·  {DateTime.Now:HH:mm}";
+                    Diagnostics.Write("Notification dequeued: " + ev.AppId);
+                    ShowNotification("VMNotify · " + ev.AppName, "虚拟机中的应用正在提醒你查看消息。");
                 }
                 lastNotification = DateTime.UtcNow;
             }
@@ -135,7 +137,12 @@ public partial class MainWindow : Window
     private void ConnectionClicked(object sender, RoutedEventArgs e) => SelectPage(1);
     private void AppsClicked(object sender, RoutedEventArgs e) => SelectPage(2);
     private void ProjectClicked(object sender, RoutedEventArgs e) => Process.Start(new ProcessStartInfo("https://github.com/Noemion/VMNotify") { UseShellExecute = true });
-    private void TestClicked(object sender, RoutedEventArgs e) => tray.ShowBalloonTip(5000, "VMNotify", "本机通知正常。虚拟机连接需单独验证。", System.Windows.Forms.ToolTipIcon.Info);
+    private void ShowNotification(string title, string text)
+    {
+        Diagnostics.Write("Requesting Windows balloon; visible=" + tray.Visible);
+        tray.ShowBalloonTip(5000, title, text, System.Windows.Forms.ToolTipIcon.Info);
+    }
+    private void TestClicked(object sender, RoutedEventArgs e) => ShowNotification("VMNotify", "这是一条本机测试通知。虚拟机连接需单独验证。");
     private void BrowseKeyClicked(object sender, RoutedEventArgs e) { var dialog = new Microsoft.Win32.OpenFileDialog { Title = "选择 SSH 私钥", CheckFileExists = true }; if (dialog.ShowDialog(this) == true) IdentityInput.Text = dialog.FileName; }
     private async void ConnectClicked(object sender, RoutedEventArgs e) => await Connect();
     private async void DisconnectClicked(object sender, RoutedEventArgs e) => await Stop();

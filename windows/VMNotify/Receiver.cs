@@ -38,7 +38,7 @@ internal sealed class Receiver
     private void ClearAttention() { lock (selectionLock) activeAlerts.Clear(); }
     public bool IsEnabled(string id) => Volatile.Read(ref enabledApps).Contains(id);
     public string Status => Volatile.Read(ref status);
-    private void SetStatus(string text) => Volatile.Write(ref status, text);
+    private void SetStatus(string text) { Volatile.Write(ref status, text); Diagnostics.Write("Status: " + text); }
 
     public static string SshPath()
     {
@@ -96,6 +96,7 @@ internal sealed class Receiver
             await foreach (var line in Protocol.Lines(process.StandardOutput, session.Token))
             {
                 var ev = AgentEvent.Parse(line);
+                if (ev.Kind != "heartbeat" && ev.Kind != "apps") Diagnostics.Write("Agent event: " + ev.Kind + " app=" + ev.AppId + " enabled=" + (ev.AppId != null && IsEnabled(ev.AppId)));
                 session.CancelAfter(TimeSpan.FromSeconds(45));
                 if (ev.Kind == "ready") { ready = true; SetStatus("已连接 · 正在监听"); }
                 if (ev.Kind == "degraded") { ClearAttention(); SetStatus("已连接 · 桌面托盘接口暂不可用"); }
