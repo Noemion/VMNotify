@@ -125,6 +125,8 @@ begin
   IntroductionText.Caption := CustomMessage('AppIntroduction');
   WizardForm.ReadyMemo.Color := clWhite;
   WizardForm.ReadyMemo.BorderStyle := bsNone;
+  WizardForm.ReadyMemo.ScrollBars := ssNone;
+  WizardForm.ReadyMemo.WordWrap := True;
 end;
 function HasFramework(const Root, Framework, RequiredFile: String): Boolean;
 var Entry: TFindRec; Base, Patch: String;
