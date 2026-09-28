@@ -1,0 +1,70 @@
+name: Build and test
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Test protocol and SSH arguments
+        run: dotnet run --project windows/VMNotify.Tests -c Release
+      - name: Validate themes, layout and overlay scrollbar
+        shell: pwsh
+        run: dotnet run --project windows/VMNotify -c Release -- --preview "$env:RUNNER_TEMP\vmnotify-ui"
+      - name: Prepare portable Inno Setup compiler
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://api.nuget.org/v3-flatcontainer/tools.innosetup/7.1.0/tools.innosetup.7.1.0.nupkg -OutFile "$env:RUNNER_TEMP\inno.zip"
+          Expand-Archive "$env:RUNNER_TEMP\inno.zip" "$env:RUNNER_TEMP\InnoSetup"
+          $signature = Get-AuthenticodeSignature "$env:RUNNER_TEMP\InnoSetup\tools\ISCC.exe"
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'O=Pyrsys B.V.') { throw 'Invalid compiler signature' }
+      - name: Package all Windows architectures
+        shell: pwsh
+        run: ./scripts/package-windows.ps1 -Iscc "$env:RUNNER_TEMP\InnoSetup\tools\ISCC.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VMNotify-windows
+          path: |
+            artifacts/*-setup.exe
+            artifacts/*-portable.zip
+            artifacts/SHA256SUMS-windows.txt
+  agent:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust target
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          rustup default stable
+          rustup target add ${{ matrix.target }}
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Package agent
+        run: |
+          mkdir -p artifacts
+          tar -czf artifacts/VMNotify-0.1.0-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release vmnotify-agent
+          cd artifacts && sha256sum *.tar.gz > SHA256SUMS-linux.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VMNotify-${{ matrix.target }}
+          path: artifacts/*

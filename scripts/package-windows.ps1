@@ -1,0 +1,25 @@
+param(
+    [ValidateSet('x86','x64','arm64')][string[]]$Architectures = @('x86','x64','arm64'),
+    [ValidatePattern('^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$')][string]$Version = '0.1.0',
+    [string]$Iscc = 'ISCC.exe',
+    [string]$OutputDirectory = ''
+)
+$ErrorActionPreference = 'Stop'
+$repoRoot = Split-Path $PSScriptRoot -Parent
+if (!$OutputDirectory) { $OutputDirectory = Join-Path $repoRoot 'artifacts' }
+$OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
+New-Item -ItemType Directory -Force $OutputDirectory | Out-Null
+foreach ($arch in $Architectures) {
+    $publishDir = Join-Path $repoRoot "artifacts\publish\win-$arch-$Version"
+    & dotnet publish (Join-Path $repoRoot 'windows\VMNotify\VMNotify.csproj') -c Release -r "win-$arch" --self-contained true -p:Version=$Version -p:DebugType=None -p:DebugSymbols=false -o $publishDir
+    if ($LASTEXITCODE) { throw "Publish failed for $arch" }
+    Copy-Item (Join-Path $repoRoot 'README.md'),(Join-Path $repoRoot 'LICENSE') -Destination $publishDir
+    Set-Content (Join-Path $publishDir 'portable.marker') 'Settings are saved beside VMNotify.exe.' -Encoding ascii
+    $zip = Join-Path $OutputDirectory "VMNotify-$Version-win-$arch-portable.zip"
+    Compress-Archive -Path "$publishDir\*" -DestinationPath $zip -Force
+    & $Iscc /Qp "/DAppVersion=$Version" "/DArch=$arch" "/DPublishDir=$publishDir" "/DOutputDir=$OutputDirectory" (Join-Path $repoRoot 'packaging\windows.iss')
+    if ($LASTEXITCODE) { throw "Installer compilation failed for $arch" }
+}
+Get-ChildItem $OutputDirectory -File | Where-Object Name -Match '^VMNotify-.*\.(zip|exe)$' |
+    Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } |
+    Set-Content (Join-Path $OutputDirectory 'SHA256SUMS-windows.txt') -Encoding ascii

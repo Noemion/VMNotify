@@ -1,0 +1,243 @@
+<Window x:Class="VMNotify.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="VMNotify" Width="1280" Height="800" MinWidth="900" MinHeight="600"
+        WindowStartupLocation="CenterScreen" Background="{DynamicResource WindowBackground}"
+        FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="14" Foreground="{DynamicResource MainText}"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+    <Window.Resources>
+        <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /><Setter Property="FontSize" Value="16"/></Style>
+        <Style x:Key="Secondary" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Muted}"/><Setter Property="FontSize" Value="14"/>
+            <Setter Property="Margin" Value="0,2,0,0"/><Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource CardBackground}"/><Setter Property="BorderBrush" Value="{DynamicResource CardBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="16,16"/><Setter Property="Margin" Value="0,0,0,6"/><Setter Property="MinHeight" Value="70"/>
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource InputBackground}"/><Setter Property="BorderBrush" Value="{DynamicResource InputBorder}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MainText}"/>
+            <Setter Property="BorderThickness" Value="1"/><Setter Property="Padding" Value="17,8"/>
+            <Setter Property="Cursor" Value="Hand"/><Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+                <Border x:Name="Face" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Face" Property="Opacity" Value="0.8"/></Trigger>
+                    <Trigger Property="IsPressed" Value="True"><Setter TargetName="Face" Property="Opacity" Value="0.65"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Face" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{DynamicResource Accent}"/><Setter Property="Foreground" Value="{DynamicResource AccentText}"/><Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="{DynamicResource InputBackground}"/><Setter Property="BorderBrush" Value="{DynamicResource InputBorder}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MainText}"/><Setter Property="CaretBrush" Value="{DynamicResource MainText}"/>
+            <Setter Property="Padding" Value="10,8"/><Setter Property="MinHeight" Value="36"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="SelectionBrush" Value="{DynamicResource Accent}"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox">
+                <Border x:Name="Outline" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1,1,1,2" CornerRadius="4">
+                    <ScrollViewer x:Name="PART_ContentHost"/>
+                </Border>
+                <ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Outline" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger></ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="Nav" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource MainText}"/>
+            <Setter Property="Margin" Value="4,2"/><Setter Property="Height" Value="40"/><Setter Property="FontSize" Value="16"/><Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
+                <Grid><Border x:Name="Background" Background="Transparent" CornerRadius="5"/>
+                    <Border x:Name="Indicator" Background="{DynamicResource Accent}" Width="3" Height="17" HorizontalAlignment="Left" CornerRadius="2" Visibility="Collapsed"/>
+                    <StackPanel Orientation="Horizontal" Margin="15,0" VerticalAlignment="Center">
+                        <TextBlock Text="{TemplateBinding Tag}" FontFamily="Segoe MDL2 Assets" FontSize="17" Width="33" VerticalAlignment="Center"/>
+                        <ContentPresenter VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Background" Property="Background" Value="{DynamicResource NavHover}"/></Trigger>
+                    <Trigger Property="IsChecked" Value="True"><Setter TargetName="Background" Property="Background" Value="{DynamicResource NavSelected}"/><Setter TargetName="Indicator" Property="Visibility" Value="Visible"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="Switch" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource MainText}"/>
+            <Setter Property="Cursor" Value="Hand"/><Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
+                <Grid Height="24">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="42"/></Grid.ColumnDefinitions>
+                    <TextBlock x:Name="StateText" Text="关" FontSize="16" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                    <Grid Grid.Column="1">
+                        <Border x:Name="Track" Height="21" CornerRadius="11" BorderBrush="{DynamicResource TrackBorder}" BorderThickness="1" Background="Transparent"/>
+                        <Ellipse x:Name="Thumb" Width="12" Height="12" Fill="{DynamicResource ThumbOff}" HorizontalAlignment="Left" Margin="5,0,0,0"/>
+                    </Grid>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsChecked" Value="True"><Setter TargetName="StateText" Property="Text" Value="开"/><Setter TargetName="Track" Property="Background" Value="{DynamicResource Accent}"/><Setter TargetName="Track" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="Thumb" Property="Fill" Value="{DynamicResource AccentText}"/><Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right"/><Setter TargetName="Thumb" Property="Margin" Value="0,0,5,0"/></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Track" Property="BorderBrush" Value="{DynamicResource MainText}"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="ScrollThumbStyle" TargetType="Thumb">
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Thumb">
+                <Border Background="Transparent"><Border x:Name="Line" Width="2" HorizontalAlignment="Center" Background="{DynamicResource ScrollThumb}" CornerRadius="2"/></Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Line" Property="Width" Value="6"/></Trigger>
+                    <Trigger Property="IsDragging" Value="True"><Setter TargetName="Line" Property="Width" Value="6"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="ScrollPageButton" TargetType="RepeatButton">
+            <Setter Property="Focusable" Value="False"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="OverlayBar" TargetType="ScrollBar">
+            <Setter Property="Width" Value="12"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ScrollBar">
+                <Grid Background="Transparent"><Track x:Name="PART_Track" IsDirectionReversed="True" Orientation="Vertical">
+                    <Track.DecreaseRepeatButton><RepeatButton Style="{StaticResource ScrollPageButton}" Command="ScrollBar.PageUpCommand"/></Track.DecreaseRepeatButton>
+                    <Track.Thumb><Thumb Style="{StaticResource ScrollThumbStyle}" MinHeight="24"/></Track.Thumb>
+                    <Track.IncreaseRepeatButton><RepeatButton Style="{StaticResource ScrollPageButton}" Command="ScrollBar.PageDownCommand"/></Track.IncreaseRepeatButton>
+                </Track></Grid>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="OverlayScroll" TargetType="ScrollViewer">
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ScrollViewer">
+                <Grid ClipToBounds="True">
+                    <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" ClipToBounds="True" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" CanContentScroll="{TemplateBinding CanContentScroll}"/>
+                    <ScrollBar x:Name="PART_VerticalScrollBar" Style="{StaticResource OverlayBar}" HorizontalAlignment="Right" Orientation="Vertical" Opacity="0"
+                        Minimum="0" Maximum="{TemplateBinding ScrollableHeight}" ViewportSize="{TemplateBinding ViewportHeight}"
+                        Value="{Binding VerticalOffset, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}"
+                        Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+                </Grid>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid x:Name="Root" Background="{DynamicResource WindowBackground}">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Grid Margin="0,12,0,16">
+            <Grid.RowDefinitions><RowDefinition Height="0"/><RowDefinition Height="*"/><RowDefinition Height="90"/></Grid.RowDefinitions>
+            <StackPanel Margin="24,16,16,0" Visibility="Collapsed">
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="32" Height="32" CornerRadius="7" Background="#0067C0"><TextBlock Text="&#xE8F2;" FontFamily="Segoe MDL2 Assets" Foreground="White" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                    <TextBlock Text="VMNotify" FontSize="19" FontWeight="SemiBold" Margin="11,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBlock Text="虚拟机消息提醒" Style="{StaticResource Secondary}" Margin="0,12,0,0"/>
+            </StackPanel>
+            <StackPanel Grid.Row="1">
+                <RadioButton x:Name="OverviewNav" Style="{StaticResource Nav}" Content="概览" Tag="&#xE80F;" GroupName="Navigation" Checked="OverviewClicked"/>
+                <RadioButton x:Name="ConnectionNav" Style="{StaticResource Nav}" Content="连接设置" Tag="&#xE968;" GroupName="Navigation" Checked="ConnectionClicked"/>
+                <RadioButton x:Name="AppsNav" Style="{StaticResource Nav}" Content="应用管理" Tag="&#xE71D;" GroupName="Navigation" Checked="AppsClicked"/>
+            </StackPanel>
+            <StackPanel Grid.Row="2" Margin="24,0,18,0" VerticalAlignment="Bottom">
+                <TextBlock x:Name="SidebarStatus" Text="●  未连接" Foreground="{DynamicResource Muted}" FontSize="14" Margin="0,0,0,18"/>
+                <TextBlock FontSize="16"><Hyperlink Click="ProjectClicked" Foreground="{DynamicResource MainText}" TextDecorations="{x:Null}">ⓘ　关于 VMNotify</Hyperlink></TextBlock>
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Column="1" Margin="16,12,24,12">
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <StackPanel Margin="0,0,0,18">
+                <TextBlock x:Name="PageTitle" Text="概览" FontSize="24"/>
+                <TextBlock x:Name="PageDescription" Text="管理虚拟机连接与应用通知。" Foreground="{DynamicResource Muted}" Visibility="Collapsed"/>
+            </StackPanel>
+            <ScrollViewer x:Name="PageScroll" Grid.Row="1" Style="{StaticResource OverlayScroll}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" ScrollChanged="PageScrolled" PreviewMouseWheel="PageWheel">
+                <Grid>
+                    <StackPanel x:Name="OverviewPage">
+                        <Border Style="{StaticResource Card}" Padding="24" Margin="0,0,0,22">
+                            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="54"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock x:Name="StatusIcon" Text="&#xE8D7;" FontFamily="Segoe MDL2 Assets" Foreground="{DynamicResource Accent}" FontSize="29" Margin="0,4,0,0"/>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock x:Name="StatusTitle" Text="连接你的虚拟机" FontSize="20" FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="StatusDetail" Style="{StaticResource Secondary}" Text="开始连接后，你选择的应用会在这台电脑上显示提醒。" Margin="0,9,0,0"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,21,0,0">
+                                        <Button x:Name="QuickConnect" Style="{StaticResource Primary}" Content="配置连接" Click="QuickConnectClicked"/>
+                                        <Button Content="断开连接" Click="DisconnectClicked" Margin="10,0,0,0"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <TextBlock Text="你的设置" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                        <Border Style="{StaticResource Card}"><Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="38"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" FontSize="20" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1"><TextBlock Text="虚拟机连接"/><TextBlock x:Name="HostSummary" Text="尚未配置" Style="{StaticResource Secondary}"/></StackPanel>
+                            <Button Grid.Column="2" Content="管理连接" Click="ConnectionClicked"/>
+                        </Grid></Border>
+                        <Border Style="{StaticResource Card}"><Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="38"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="&#xE71D;" FontFamily="Segoe MDL2 Assets" FontSize="20" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1"><TextBlock Text="应用转发"/><TextBlock x:Name="AppsSummary" Text="连接后发现受支持的应用" Style="{StaticResource Secondary}"/></StackPanel>
+                            <Button Grid.Column="2" Content="选择应用" Click="AppsClicked"/>
+                        </Grid></Border>
+                        <TextBlock Text="最近提醒" FontWeight="SemiBold" Margin="0,25,0,10"/>
+                        <Border Style="{StaticResource Card}"><StackPanel><TextBlock x:Name="LastNotification" Text="还没有收到提醒"/><TextBlock Text="来自虚拟机的应用提醒会出现在 Windows 通知中。" Style="{StaticResource Secondary}"/></StackPanel></Border>
+                        <StackPanel Orientation="Horizontal" Margin="0,22,0,0"><Button Content="测试本机通知" Click="TestClicked"/><TextBlock Text="关闭窗口后，仍在系统托盘中运行。" Style="{StaticResource Secondary}" VerticalAlignment="Center" Margin="16,0,0,0"/></StackPanel>
+                    </StackPanel>
+
+                    <StackPanel x:Name="ConnectionPage" Visibility="Collapsed">
+                        <Border Style="{StaticResource Card}"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Margin="0,0,16,0"><TextBlock Text="虚拟机地址"/><TextBlock Text="IP 地址或主机名" Style="{StaticResource Secondary}"/></StackPanel>
+                            <TextBox x:Name="HostInput" Grid.Column="1" AutomationProperties.Name="虚拟机地址"/>
+                        </Grid></Border>
+                        <Border Style="{StaticResource Card}"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Margin="0,0,16,0"><TextBlock Text="登录用户"/><TextBlock Text="运行应用的 Linux 桌面账户" Style="{StaticResource Secondary}"/></StackPanel>
+                            <TextBox x:Name="UserInput" Grid.Column="1" AutomationProperties.Name="SSH 用户名"/>
+                        </Grid></Border>
+                        <Border Style="{StaticResource Card}"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Margin="0,0,16,0"><TextBlock Text="端口"/><TextBlock Text="SSH 默认使用端口 22" Style="{StaticResource Secondary}"/></StackPanel>
+                            <TextBox x:Name="PortInput" Grid.Column="1" Text="22" AutomationProperties.Name="SSH 端口"/>
+                        </Grid></Border>
+                        <Border Style="{StaticResource Card}"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Margin="0,0,16,0"><TextBlock Text="身份验证密钥"/><TextBlock Text="留空使用默认密钥或 ssh-agent" Style="{StaticResource Secondary}"/></StackPanel>
+                            <Grid Grid.Column="1"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="IdentityInput" AutomationProperties.Name="SSH 私钥路径"/><Button Grid.Column="1" Content="…" Margin="6,0,0,0" Padding="12,4" Click="BrowseKeyClicked" AutomationProperties.Name="浏览私钥"/></Grid>
+                        </Grid></Border>
+                        <Border Style="{StaticResource Card}"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Margin="0,0,16,0"><TextBlock Text="采集端路径"/><TextBlock Text="虚拟机内的可执行文件路径" Style="{StaticResource Secondary}"/></StackPanel>
+                            <TextBox x:Name="AgentInput" Grid.Column="1" AutomationProperties.Name="Linux 代理路径"/>
+                        </Grid></Border>
+                        <Border Style="{StaticResource Card}"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,20,0" VerticalAlignment="Center"><TextBlock Text="启动后自动连接"/><TextBlock Text="打开 VMNotify 时，自动连接上次配置的虚拟机。" Style="{StaticResource Secondary}"/></StackPanel><CheckBox x:Name="AutoConnectInput" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="启动后自动连接"/>
+                        </Grid></Border>
+                        <Border Style="{StaticResource Card}"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,20,0" VerticalAlignment="Center"><TextBlock Text="登录 Windows 时启动"/><TextBlock Text="登录当前 Windows 账户后运行 VMNotify。" Style="{StaticResource Secondary}"/></StackPanel><CheckBox x:Name="StartupInput" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="登录 Windows 后启动"/>
+                        </Grid></Border>
+                    </StackPanel>
+
+                    <StackPanel x:Name="AppsPage" Visibility="Collapsed">
+                        <Border Style="{StaticResource Card}" Background="{DynamicResource InfoBackground}" Margin="0,0,0,18">
+                            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="30"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" Foreground="{DynamicResource Accent}" FontSize="17" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="自动发现虚拟机中受支持的应用。开关即时生效，选择会自动保存。" Foreground="{DynamicResource Muted}" FontSize="14"/>
+                            </Grid>
+                        </Border>
+                        <TextBlock x:Name="AppListHeading" Text="可转发的应用" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                        <Border x:Name="EmptyApps" Style="{StaticResource Card}" Padding="24,30">
+                            <StackPanel><TextBlock Text="尚未发现应用" FontSize="17" FontWeight="SemiBold"/><TextBlock Text="连接虚拟机后，已安装或正在运行的受支持应用将显示在这里。" Style="{StaticResource Secondary}" Margin="0,10,0,0"/></StackPanel>
+                        </Border>
+                        <ItemsControl x:Name="AppItems"><ItemsControl.ItemTemplate><DataTemplate>
+                            <Border Style="{StaticResource Card}" Padding="20,21"><Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <Border Width="34" Height="34" CornerRadius="7" Background="{DynamicResource InfoBackground}" HorizontalAlignment="Left"><TextBlock Text="&#xE8F2;" FontFamily="Segoe MDL2 Assets" Foreground="{DynamicResource Accent}" FontSize="19" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                                <StackPanel Grid.Column="1"><TextBlock Text="{Binding Name}" FontWeight="SemiBold"/><TextBlock Text="{Binding Detail}" Style="{StaticResource Secondary}"/></StackPanel>
+                                <CheckBox Grid.Column="2" Style="{StaticResource Switch}" IsChecked="{Binding Enabled, Mode=TwoWay}" Click="AppToggleClicked" AutomationProperties.Name="{Binding Name}"/>
+                            </Grid></Border>
+                        </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                        <TextBlock Text="仅转发“有消息待查看”的提醒，不读取聊天正文。" Style="{StaticResource Secondary}" Margin="0,18,0,0"/>
+                        <TextBlock Text="当前版本内置蓝信适配器，后续可扩展更多应用。" Style="{StaticResource Secondary}"/>
+                    </StackPanel>
+                </Grid>
+            </ScrollViewer>
+            <Grid x:Name="ConnectionFooter" Grid.Row="2" Margin="0,18,0,0" Visibility="Collapsed">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                <Button x:Name="SaveConnect" Style="{StaticResource Primary}" Content="保存并连接" Click="ConnectClicked"/>
+                <TextBlock Grid.Column="1" Text="首次连接前，请完成密钥登录并核对主机指纹。" Style="{StaticResource Secondary}" VerticalAlignment="Center" Margin="16,0,0,0"/>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

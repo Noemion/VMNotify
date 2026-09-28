@@ -1,0 +1,10 @@
+{
+  "apps": [
+    {
+      "id": "lanxin",
+      "name": "蓝信",
+      "process": "LxGtk3Plugin",
+      "executable": "/opt/apps/cn.lanxin/files/bin/LxMainNew"
+    }
+  ]
+}
