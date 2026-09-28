@@ -31,6 +31,7 @@ internal static class UpdateTests
             bool rejected = false;
             try { Updates.ParseRelease(invalid, "0.1.1", "x64"); } catch (InvalidDataException) { rejected = true; }
             Check(rejected);
+
         }
         string folder = Path.Combine(Path.GetTempPath(), "VMNotify-update-test-" + Guid.NewGuid().ToString("N"));
         using var client = new HttpClient(new Handler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(content) }));
@@ -55,6 +56,20 @@ internal static class UpdateTests
             try { await new Updates(missing, folder).Check("0.1.1", "x64", default); }
             catch (InvalidDataException) { rejected = true; }
             Check(rejected);
+            await service.Download(release, new Progress<int>(), default);
+            await File.WriteAllTextAsync(Path.Combine(folder, "VMNotify-0.1.0-win-x86-setup.exe.partial"), "partial");
+            await File.WriteAllTextAsync(Path.Combine(folder, "VMNotify-0.1.0-win-arm64-setup.exe.json"), "broken metadata");
+            await File.WriteAllTextAsync(Path.Combine(folder, "settings.json"), "keep");
+            var cleaned = service.DeleteAll();
+            Check(cleaned.Deleted == 4 && cleaned.Failed == 0 && service.Downloads().Count == 0);
+            Check(File.Exists(Path.Combine(folder, "settings.json")));
+            Check(service.DeleteAll() == (0, 0));
+            await service.Download(release, new Progress<int>(), default);
+            using (var locked = new FileStream(Path.Combine(folder, name), FileMode.Open, FileAccess.Read, FileShare.None)) {
+                cleaned = service.DeleteAll();
+                Check(cleaned.Failed == 1 && File.Exists(Path.Combine(folder, name)));
+            }
+            Check(service.DeleteAll() == (1, 0));
         }
         finally
         {

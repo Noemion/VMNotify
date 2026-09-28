@@ -306,7 +306,11 @@
                             </WrapPanel>
                             <ProgressBar x:Name="UpdateProgress" Height="4" Margin="0,12,0,0" Minimum="0" Maximum="100" Visibility="Collapsed"/>
                         </StackPanel></Border>
-                        <TextBlock Text="已下载的安装包" FontWeight="SemiBold" Margin="0,16,0,8"/>
+                        <Grid Margin="0,16,0,8">
+                            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="已下载的安装包" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <Button x:Name="ClearDownloadsButton" Grid.Column="1" Content="全部删除" Click="ClearDownloadsClicked"/>
+                        </Grid>
                         <TextBlock x:Name="NoDownloads" Text="暂无已下载的安装包。" Style="{StaticResource Secondary}"/>
                         <ItemsControl x:Name="DownloadedPackages"><ItemsControl.ItemTemplate><DataTemplate>
                             <Border Style="{StaticResource Card}"><Grid>

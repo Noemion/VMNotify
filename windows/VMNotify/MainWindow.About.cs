@@ -45,6 +45,7 @@ public partial class MainWindow
         if (updateWorking) return;
         updateWorking = true;
         CheckUpdateButton.IsEnabled = DownloadUpdateButton.IsEnabled = DownloadedPackages.IsEnabled = false;
+        ClearDownloadsButton.IsEnabled = false;
         try { await action(); }
         catch (OperationCanceledException) { UpdateStatus.Text = "请求超时或已取消，请重试。"; }
         catch (Exception ex) { UpdateStatus.Text = ex.Message; }
@@ -52,6 +53,7 @@ public partial class MainWindow
         {
             updateWorking = false;
             CheckUpdateButton.IsEnabled = DownloadedPackages.IsEnabled = true;
+            ClearDownloadsButton.IsEnabled = true;
             DownloadUpdateButton.IsEnabled = availableUpdate != null;
             UpdateProgress.Visibility = Visibility.Collapsed;
             RefreshDownloads();
@@ -100,4 +102,12 @@ public partial class MainWindow
             return Task.CompletedTask;
         });
     }
+    private async void ClearDownloadsClicked(object sender, RoutedEventArgs e) => await UpdateOperation(async () =>
+    {
+        UpdateStatus.Text = "正在清理下载文件…";
+        var result = await Task.Run(updates.DeleteAll);
+        UpdateStatus.Text = result.Failed > 0
+            ? $"已清理 {result.Deleted} 个文件，{result.Failed} 个文件无法删除，请关闭相关安装程序后重试。"
+            : result.Deleted == 0 ? "没有需要清理的下载文件。" : "已清理全部下载的软件包和临时文件。";
+    });
 }

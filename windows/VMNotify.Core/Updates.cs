@@ -142,4 +142,24 @@ public sealed class Updates(HttpClient client, string directory)
         File.Delete(path);
         File.Delete(path + ".json");
     }
+
+    public (int Deleted, int Failed) DeleteAll()
+    {
+        if (!Directory.Exists(directory)) return (0, 0);
+        if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+            throw new IOException("更新目录不能是链接。");
+        int deleted = 0, failed = 0;
+        foreach (var file in Directory.GetFiles(directory)) {
+            var name = Path.GetFileName(file);
+            var baseName = name.EndsWith(".partial", StringComparison.Ordinal) ? name[..^8]
+                : name.EndsWith(".json", StringComparison.Ordinal) ? name[..^5] : name;
+            if (!FilePattern.IsMatch(baseName)) continue;
+            try {
+                _ = LocalPath(baseName);
+                File.Delete(file);
+                deleted++;
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { failed++; }
+        }
+        return (deleted, failed);
+    }
 }
