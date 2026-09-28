@@ -12,7 +12,7 @@ Forward application attention events from Linux virtual machines to your Windows
 - **窗口与图标**：一体化标题栏保留最小化、最大化/还原、关闭按钮，以及原生拖动、双击最大化和边缘缩放。程序、安装包、任务栏、标题栏和托盘使用同一套 16–256 像素多分辨率图标。关闭窗口后继续在托盘运行。
 - **应用发现**：每约 5 秒扫描受支持应用；向宿主机提供已安装/正在监听的应用列表。新发现的应用不会自动开启转发，默认只开启蓝信。
 - **当前内置适配器只有蓝信**，依据托盘连续闪烁判断“需要关注”，不读取聊天内容，也不统计消息条数。支持其他应用需要适配与验证，不能因为应用出现在进程列表就保证能转发。
-- Windows x86、x64、ARM64 各提供自包含 EXE 安装程序和 Portable ZIP。无需安装 .NET 运行时；仍需 Windows OpenSSH 客户端。
+- Windows x86、x64、ARM64 各提供 EXE 安装程序和 Portable ZIP，均不包含 .NET 运行时。需要预先安装与包架构一致的 **.NET Desktop Runtime 10.0**（建议最新 10.0 补丁版），以及 Windows OpenSSH 客户端。
 - Linux 提供 x86_64、aarch64 静态 musl 构建。现场验证以麒麟 V10 SP1 / UKUI / x86_64 为准，其他桌面需测试。
 
 ## 工作方式
@@ -46,7 +46,7 @@ Windows: 设置/应用选择 ← 应用清单 ← 事件读取与去重 ←─�
 
    Windows 设置 → 可选功能可安装 OpenSSH 客户端。密钥可以由 ssh-agent 管理，或在 VMNotify 中填写私钥路径。应用不保存密码，不自动接受未知/变化的主机密钥。
 
-3. 运行 Windows 安装包，或将 Portable ZIP 解压到可写目录后运行 `VMNotify.exe`。
+3. 从 [微软官网下载页](https://dotnet.microsoft.com/download/dotnet/10.0) 安装对应 x86 / x64 / ARM64 的 **.NET Desktop Runtime 10.0**；普通 .NET Runtime、ASP.NET Core Runtime 或 .NET Framework 不能替代它。运行 Windows 安装包，或将 Portable ZIP 解压到可写目录后运行 `VMNotify.exe`。安装器在写入文件前检查对应架构的运行时，缺少时提示下载地址并阻止继续，可安装依赖后重试；不会自动下载运行时。便携版由程序启动器提示缺少依赖。旧自包含便携版请解压到新目录，只迁移 `settings.json`。
 4. 填写主机、桌面用户名及端口。代理路径默认 `.local/bin/vmnotify-agent`（相对远端用户主目录，不要写 `~`），也可以填写绝对路径。
 5. 点击“保存并连接”。连接后勾选需要转发的应用；选择即时生效并保存。空列表表示尚未发现受支持应用，不代表所有 Linux 应用均不支持通知。
 6. 点击“测试本机通知”可检查 Windows 显示效果。关闭设置窗口后程序继续在托盘运行，右键托盘选择退出。
