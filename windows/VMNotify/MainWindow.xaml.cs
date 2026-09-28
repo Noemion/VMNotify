@@ -70,6 +70,11 @@ public partial class MainWindow : Window
         using (var stream = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/Assets/VMNotify.ico")).Stream)
         using (var loadedIcon = new System.Drawing.Icon(stream, 32, 32)) trayIcon = (System.Drawing.Icon)loadedIcon.Clone();
         tray = new() { Icon = trayIcon, Text = "VMNotify", Visible = !preview };
+        if (!preview) {
+            tray.BalloonTipShown += (_, _) => Diagnostics.Write("Windows balloon shown");
+            tray.BalloonTipClosed += (_, _) => Diagnostics.Write("Windows balloon closed");
+            tray.BalloonTipClicked += (_, _) => Diagnostics.Write("Windows balloon clicked");
+        }
         var menu = new System.Windows.Forms.ContextMenuStrip();
         menu.Items.Add("打开 VMNotify", null, (_, _) => Dispatcher.Invoke(ShowWindow));
         menu.Items.Add("退出", null, (_, _) => Dispatcher.InvokeAsync(async () => { quitting = true; await Stop(); Close(); }));
@@ -161,9 +166,12 @@ public partial class MainWindow : Window
     private void AppsClicked(object sender, RoutedEventArgs e) => SelectPage(2);
     private void ShowNotification(string title, string text)
     {
-        Diagnostics.Write("Requesting Windows balloon; visible=" + tray.Visible);
+        var result = SHQueryUserNotificationState(out var state);
+        Diagnostics.Write($"Requesting Windows balloon; visible={tray.Visible}; shellState={state}; result={result}");
         tray.ShowBalloonTip(5000, title, text, System.Windows.Forms.ToolTipIcon.Info);
     }
+    [DllImport("shell32.dll")]
+    private static extern int SHQueryUserNotificationState(out int state);
     private void TestClicked(object sender, RoutedEventArgs e) => ShowNotification("VMNotify", "这是一条本机测试通知。虚拟机连接需单独验证。");
     private void BrowseKeyClicked(object sender, RoutedEventArgs e) { var dialog = new Microsoft.Win32.OpenFileDialog { Title = "选择 SSH 私钥", CheckFileExists = true }; if (dialog.ShowDialog(this) == true) IdentityInput.Text = dialog.FileName; }
     private async void ConnectClicked(object sender, RoutedEventArgs e) => await Connect();
