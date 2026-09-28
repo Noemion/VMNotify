@@ -47,6 +47,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
 [CustomMessages]
+english.MoveFailed=The previous installation could not be removed. Close VMNotify and try again. Your saved connection settings are retained.
+chinesesimplified.MoveFailed=无法移除旧版安装。请退出 VMNotify 后重试。已保存的连接配置会保留。
 english.IntroductionTitle=Welcome to VMNotify
 chinesesimplified.IntroductionTitle=欢迎使用 VMNotify
 english.IntroductionDescription=Message alerts from your virtual machine, on your Windows desktop.
@@ -74,6 +76,42 @@ Name: "{group}\{cm:UninstallApp}"; Filename: "{uninstallexe}"
 Filename: "{app}\VMNotify.exe"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+var RestoreStartupAfterMove: Boolean;
+
+function RemovePreviousLocation: Boolean;
+var OldPath, Uninstaller, StartupValue: String; RootKey: Integer; ExitCode: Integer;
+begin
+  Result := True;
+  RootKey := HKCU32;
+  if IsWin64 then
+    if RegKeyExists(HKCU64, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\VMNotify_is1') then
+      RootKey := HKCU64;
+  if not RegQueryStringValue(RootKey, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\VMNotify_is1', 'InstallLocation', OldPath) then Exit;
+  if OldPath = '' then Exit;
+  OldPath := RemoveBackslashUnlessRoot(ExpandFileName(OldPath));
+  if CompareText(OldPath, RemoveBackslashUnlessRoot(ExpandFileName(ExpandConstant('{app}')))) = 0 then Exit;
+  Result := False;
+  if not RegQueryStringValue(RootKey, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\VMNotify_is1', 'UninstallString', Uninstaller) then Exit;
+  Uninstaller := RemoveQuotes(Uninstaller);
+  { Only execute the registered uninstaller inside the registered old location. }
+  if CompareText(RemoveBackslashUnlessRoot(ExtractFileDir(ExpandFileName(Uninstaller))), OldPath) <> 0 then Exit;
+  if not FileExists(Uninstaller) then Exit;
+  if RegQueryStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'VMNotify', StartupValue) then
+    RestoreStartupAfterMove := CompareText(StartupValue, '"' + OldPath + '\VMNotify.exe"') = 0;
+  Log('Moving installation from ' + OldPath + ' to ' + ExpandConstant('{app}'));
+  if not Exec(Uninstaller, '/SILENT /NORESTART', OldPath, SW_SHOWNORMAL, ewWaitUntilTerminated, ExitCode) then Exit;
+  Result := (ExitCode = 0) and not FileExists(OldPath + '\VMNotify.exe');
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssInstall then
+    if not RemovePreviousLocation then
+      RaiseException(CustomMessage('MoveFailed'));
+  if (CurStep = ssPostInstall) and RestoreStartupAfterMove then
+    RegWriteStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'VMNotify', '"' + ExpandConstant('{app}\VMNotify.exe') + '"');
+end;
+
 procedure InitializeWizard;
 var IntroductionPage: TWizardPage; IntroductionText: TNewStaticText;
 begin
