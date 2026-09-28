@@ -69,6 +69,9 @@ Assert(optIn.Notifications.Reader.TryRead(out var pending) && pending.AppName ==
 optIn.SetEnabledApps(["lanxin"]);
 optIn.ApplyAttention(evt);
 Assert(!optIn.Notifications.Reader.TryRead(out _), "same attention must not repeat");
+optIn.ApplyAttention(evt with { Kind = "cleared" });
+optIn.ApplyAttention(evt);
+Assert(optIn.Notifications.Reader.TryRead(out var nextRound) && nextRound.AppId == "lanxin", "a new attention round on the same connection must notify again");
 optIn.SetEnabledApps([]);
 optIn.ApplyAttention(evt with { Kind = "cleared" });
 optIn.SetEnabledApps(["lanxin"]);
