@@ -42,6 +42,12 @@ UsePreviousLanguage=no
 Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
+[Messages]
+english.ReadyLabel2a=VMNotify forwards message alerts from supported apps in your Linux virtual machine to Windows, so you can stay informed without switching windows.%n%nClick Install to continue, or Back to review your settings.
+english.ReadyLabel2b=VMNotify forwards message alerts from supported apps in your Linux virtual machine to Windows, so you can stay informed without switching windows.%n%nClick Install to continue.
+chinesesimplified.ReadyLabel2a=VMNotify 将 Linux 虚拟机中受支持应用的消息提醒转发到 Windows，无需切换窗口即可获知新消息。%n%n点击“安装”继续，或点击“上一步”检查设置。
+chinesesimplified.ReadyLabel2b=VMNotify 将 Linux 虚拟机中受支持应用的消息提醒转发到 Windows，无需切换窗口即可获知新消息。%n%n点击“安装”继续。
+
 [CustomMessages]
 english.UninstallApp=Uninstall VMNotify
 chinesesimplified.UninstallApp=卸载 VMNotify
