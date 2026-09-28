@@ -1,7 +1,7 @@
 <Window x:Class="VMNotify.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="VMNotify" Width="1280" Height="800" MinWidth="900" MinHeight="600"
+        Title="VMNotify" Width="1024" Height="640" MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen" Background="{DynamicResource WindowBackground}"
         WindowStyle="None" ResizeMode="CanResize" Icon="Assets/VMNotify.ico"
         FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="14" Foreground="{DynamicResource MainText}"
@@ -258,8 +258,6 @@
                                 <CheckBox Grid.Column="2" Style="{StaticResource Switch}" IsChecked="{Binding Enabled, Mode=TwoWay}" Click="AppToggleClicked" AutomationProperties.Name="{Binding Name}"/>
                             </Grid></Border>
                         </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-                        <TextBlock Text="仅转发“有消息待查看”的提醒，不读取聊天正文。" Style="{StaticResource Secondary}" Margin="0,18,0,0"/>
-                        <TextBlock Text="当前版本内置蓝信适配器，后续可扩展更多应用。" Style="{StaticResource Secondary}"/>
                     </StackPanel>
                 </Grid>
             </ScrollViewer>
