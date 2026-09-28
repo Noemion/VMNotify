@@ -1,5 +1,28 @@
 using VMNotify;
 
+if (args.Length == 4 && args[0] == "--ssh-names") {
+    System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+    Console.OutputEncoding = System.Text.Encoding.GetEncoding(936);
+    var receiver = new Receiver();
+    using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+    var running = receiver.Run(new Settings { Host = args[1], User = args[2], AgentPath = args[3] }, stop.Token);
+    bool correct = false;
+    try {
+        while (!stop.IsCancellationRequested) {
+            var app = receiver.AvailableApps.FirstOrDefault(a => a.Id == "lanxin");
+            if (app != null) {
+                if (app.Name != "蓝信") throw new Exception("SSH UTF-8 application name was corrupted");
+                correct = true;
+                break;
+            }
+            await Task.Delay(100, stop.Token);
+        }
+    } finally { stop.Cancel(); await running; }
+    if (!correct) throw new Exception("SSH name discovery failed");
+    Console.WriteLine("PASS: actual SSH UTF-8 name with Windows code page 936.");
+    return;
+}
+
 if (args.Length == 4 && args[0] is "--ssh" or "--ssh-muted") {
     bool muted = args[0] == "--ssh-muted";
     var receiver = new Receiver();

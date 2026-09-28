@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Threading.Channels;
 
 namespace VMNotify;
@@ -50,7 +51,8 @@ internal sealed class Receiver
         SetStatus("正在通过 SSH 连接…");
         Volatile.Write(ref availableApps, []);
         var info = new ProcessStartInfo(SshPath()) { RedirectStandardOutput = true, RedirectStandardError = true,
-            RedirectStandardInput = true, UseShellExecute = false, CreateNoWindow = true };
+            RedirectStandardInput = true, UseShellExecute = false, CreateNoWindow = true,
+            StandardOutputEncoding = new UTF8Encoding(false, true), StandardErrorEncoding = Encoding.UTF8 };
         foreach (var arg in settings.SshArguments()) info.ArgumentList.Add(arg);
         using var process = Process.Start(info) ?? throw new IOException("无法启动 SSH");
         process.StandardInput.Close();
