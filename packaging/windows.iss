@@ -68,7 +68,7 @@ Filename: "{app}\VMNotify.exe"; Description: "{cm:LaunchApp}"; Flags: nowait pos
 [Code]
 procedure InitializeWizard;
 begin
-  WizardForm.ReadyMemo.Color := WizardForm.Color;
+  WizardForm.ReadyMemo.Color := clWhite;
   WizardForm.ReadyMemo.BorderStyle := bsNone;
   WizardForm.ReadyMemo.ScrollBars := ssNone;
   WizardForm.ReadyMemo.WordWrap := True;
