@@ -8,12 +8,34 @@ namespace VMNotify;
 internal sealed class Receiver
 {
     public readonly Channel<AgentEvent> Notifications = Channel.CreateBounded<AgentEvent>(
-        new BoundedChannelOptions(32) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true, SingleWriter = true });
+        new BoundedChannelOptions(32) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true, SingleWriter = false });
+    private readonly object selectionLock = new();
+    private readonly Dictionary<string, AgentEvent> activeAlerts = new();
     private string status = "未连接";
     private AvailableApp[] availableApps = [];
     private string[] enabledApps = [];
     public AvailableApp[] AvailableApps => Volatile.Read(ref availableApps);
-    public void SetEnabledApps(string[] ids) => Volatile.Write(ref enabledApps, ids.ToArray());
+    public void SetEnabledApps(string[] ids)
+    {
+        lock (selectionLock)
+        {
+            var previous = enabledApps;
+            Volatile.Write(ref enabledApps, ids.Distinct().ToArray());
+            foreach (var id in enabledApps.Except(previous))
+                if (activeAlerts.TryGetValue(id, out var alert)) Notifications.Writer.TryWrite(alert);
+        }
+    }
+    internal void ApplyAttention(AgentEvent ev)
+    {
+        lock (selectionLock)
+        {
+            if (ev.Kind == "cleared") { activeAlerts.Remove(ev.AppId!); return; }
+            if (!activeAlerts.TryAdd(ev.AppId!, ev)) return;
+            if (activeAlerts.Count > 64) throw new InvalidDataException("代理发送了过多应用");
+            if (IsEnabled(ev.AppId!)) Notifications.Writer.TryWrite(ev);
+        }
+    }
+    private void ClearAttention() { lock (selectionLock) activeAlerts.Clear(); }
     public bool IsEnabled(string id) => Volatile.Read(ref enabledApps).Contains(id);
     public string Status => Volatile.Read(ref status);
     private void SetStatus(string text) => Volatile.Write(ref status, text);
@@ -49,6 +71,7 @@ internal sealed class Receiver
     private async Task Session(Settings settings, CancellationToken stop)
     {
         SetStatus("正在通过 SSH 连接…");
+        ClearAttention();
         Volatile.Write(ref availableApps, []);
         var info = new ProcessStartInfo(SshPath()) { RedirectStandardOutput = true, RedirectStandardError = true,
             RedirectStandardInput = true, UseShellExecute = false, CreateNoWindow = true,
@@ -67,7 +90,6 @@ internal sealed class Receiver
                     Volatile.Write(ref lastError, new string(chars, 0, n).Trim());
             } catch (OperationCanceledException) { }
         }, CancellationToken.None);
-        var active = new HashSet<string>();
         bool ready = false;
         try
         {
@@ -76,14 +98,9 @@ internal sealed class Receiver
                 var ev = AgentEvent.Parse(line);
                 session.CancelAfter(TimeSpan.FromSeconds(45));
                 if (ev.Kind == "ready") { ready = true; SetStatus("已连接 · 正在监听"); }
-                if (ev.Kind == "degraded") { active.Clear(); SetStatus("已连接 · 桌面托盘接口暂不可用"); }
+                if (ev.Kind == "degraded") { ClearAttention(); SetStatus("已连接 · 桌面托盘接口暂不可用"); }
                 if (ev.Kind == "apps") Volatile.Write(ref availableApps, ev.Apps!);
-                if (ev.Kind == "cleared") active.Remove(ev.AppId!);
-                if (ev.Kind == "attention" && ready && active.Add(ev.AppId!))
-                {
-                    if (active.Count > 64) throw new InvalidDataException("代理发送了过多应用");
-                    if (IsEnabled(ev.AppId!)) Notifications.Writer.TryWrite(ev);
-                }
+                if (ev.Kind == "cleared" || (ev.Kind == "attention" && ready)) ApplyAttention(ev);
             }
             throw new IOException(Volatile.Read(ref lastError));
         }
@@ -91,6 +108,7 @@ internal sealed class Receiver
         { throw new IOException("45 秒未收到代理心跳"); }
         finally
         {
+            ClearAttention();
             session.Cancel();
             try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
             await process.WaitForExitAsync(CancellationToken.None);
