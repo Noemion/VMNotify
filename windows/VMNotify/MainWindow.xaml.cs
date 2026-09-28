@@ -49,8 +49,6 @@ public partial class MainWindow : Window
         InitializeComponent();
         var build = typeof(MainWindow).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
             .Cast<System.Reflection.AssemblyInformationalVersionAttribute>().Single().InformationalVersion;
-        VersionLabel.Text = "版本 " + build.Split('+')[0];
-        VersionLabel.ToolTip = build;
         InitializeAbout(build);
         SystemTheme.Apply(this, SystemTheme.IsLight());
         SourceInitialized += (_, _) => {
@@ -176,8 +174,6 @@ public partial class MainWindow : Window
         StatusTitle.Text = connected ? "正在接收虚拟机提醒" : receiver.Status.StartsWith("正在") ? "正在连接虚拟机" : "连接你的虚拟机";
         StatusDetail.Text = receiver.Status is "未连接" or "已断开" ? "开始连接后，你选择的应用会在这台电脑上显示提醒。" : receiver.Status;
         StatusIcon.Text = connected ? "\uE73E" : "\uE8D7";
-        SidebarStatus.Text = connected ? "●  已连接" : "●  未连接";
-        SidebarStatus.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, connected ? "Accent" : "Muted");
         tray.Text = "VMNotify · " + (connected ? "已连接" : "未连接");
         HostSummary.Text = saved.Host.Length == 0 ? "尚未配置" : saved.Host;
         AppsSummary.Text = receiver.AvailableApps.Length == 0 ? "连接后发现受支持的应用" : $"{receiver.AvailableApps.Count(a => enabled.Contains(a.Id))} 个应用已开启转发";
@@ -251,7 +247,7 @@ public partial class MainWindow : Window
         HostInput.Text = "192.0.2.10"; UserInput.Text = "desktop-user";
         RenderApps([new("lanxin", "蓝信", true, "status-notifier-flash", "attention-only")]);
         StatusTitle.Text = "正在接收虚拟机提醒"; StatusDetail.Text = "已连接。应用提醒会自动转发到这台电脑。";
-        StatusIcon.Text = "\uE73E"; SidebarStatus.Text = "●  已连接"; HostSummary.Text = "192.0.2.10"; AppsSummary.Text = "1 个应用已开启转发"; QuickConnect.Content = "重新连接";
+        StatusIcon.Text = "\uE73E"; HostSummary.Text = "192.0.2.10"; AppsSummary.Text = "1 个应用已开启转发"; QuickConnect.Content = "重新连接";
         string[] names = ["overview", "connection", "apps", "about"];
         void Capture(string name) {
             UpdateLayout();

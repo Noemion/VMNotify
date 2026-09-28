@@ -165,8 +165,6 @@
                 <RadioButton x:Name="AppsNav" Style="{StaticResource Nav}" Content="应用管理" Tag="&#xE71D;" GroupName="Navigation" Checked="AppsClicked"/>
             </StackPanel>
             <StackPanel Grid.Row="2" VerticalAlignment="Bottom">
-                <TextBlock x:Name="SidebarStatus" Text="●  未连接" Foreground="{DynamicResource Muted}" FontSize="14" Margin="24,0,18,12"/>
-                <TextBlock x:Name="VersionLabel" Style="{StaticResource Secondary}" Margin="24,0,18,8"/>
                 <RadioButton x:Name="AboutNav" Style="{StaticResource Nav}" Content="关于" Tag="&#xE946;" GroupName="Navigation" Checked="AboutClicked"/>
             </StackPanel>
         </Grid>

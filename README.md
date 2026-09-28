@@ -28,7 +28,7 @@ Windows: 设置/应用选择 ← 应用清单 ← 事件读取与去重 ←─�
 
 ## 使用
 
-Windows 客户端版本以 `windows/VERSION` 为准；界面左下角与“关于”页面显示当前版本，“关于”还显示架构和 Git 构建标识。更新记录见 `CHANGELOG.md`。
+Windows 客户端版本以 `windows/VERSION` 为准；“关于”页面显示当前版本，“关于”还显示架构和 Git 构建标识。更新记录见 `CHANGELOG.md`。
 
 “关于”支持手动检查 GitHub 最新正式 Release、下载对应程序架构的安装包、启动安装向导和删除已下载文件。首次打开不会自动联网检查。下载保存于系统当前用户的 `%LOCALAPPDATA%\VMNotify\Updates`，退出后仍可管理。下载完成和启动安装前均校验 GitHub Release 提供的 SHA-256；这是完整性校验，不是代码签名。未发布 Release、缺少对应架构附件、网络错误均会显示具体提示。
 
