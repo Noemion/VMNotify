@@ -66,6 +66,14 @@ Name: "{group}\{cm:UninstallApp}"; Filename: "{uninstallexe}"
 Filename: "{app}\VMNotify.exe"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+procedure InitializeWizard;
+begin
+  WizardForm.ReadyMemo.Color := WizardForm.Color;
+  WizardForm.ReadyMemo.BorderStyle := bsNone;
+  WizardForm.ReadyMemo.ScrollBars := ssNone;
+  WizardForm.ReadyMemo.WordWrap := True;
+end;
+
 function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo,
   MemoTypeInfo, MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
 begin
