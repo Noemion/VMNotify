@@ -37,12 +37,20 @@ RestartApplications=no
 LanguageDetectionMethod=uilanguage
 ShowLanguageDialog=no
 UsePreviousLanguage=no
+DisableWelcomePage=yes
+DisableDirPage=no
+DisableProgramGroupPage=no
+DisableReadyPage=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
 [CustomMessages]
+english.IntroductionTitle=Welcome to VMNotify
+chinesesimplified.IntroductionTitle=欢迎使用 VMNotify
+english.IntroductionDescription=Message alerts from your virtual machine, on your Windows desktop.
+chinesesimplified.IntroductionDescription=虚拟机里的消息，Windows 上及时获知。
 english.AppIntroduction=Receive alerts from your Linux virtual machine on Windows,%nwithout switching windows.%n%nFEATURES%n  - Discover supported apps and choose which can notify you.%n  - Save settings automatically and reconnect when needed.%n  - Keep running in the tray; follow the Windows theme.%n%nGET STARTED%nInstall the Linux agent, connect over SSH, then select apps.%n%nREQUIREMENTS%n.NET Desktop Runtime 10.0 and Windows OpenSSH client.
 chinesesimplified.AppIntroduction=将 Linux 虚拟机中受支持应用的消息提醒转发到 Windows，%n无需切换窗口，即可及时获知新消息。%n%n主要功能%n  · 自动发现受支持应用，按需开启消息提醒。%n  · 自动保存设置，支持断线重连。%n  · 托盘后台运行，跟随系统浅色或深色主题。%n%n开始使用%n安装 Linux 采集端 → 配置 SSH 连接 → 选择提醒应用。%n%n运行环境%n.NET Desktop Runtime 10.0 和 Windows OpenSSH 客户端。
 english.UninstallApp=Uninstall VMNotify
@@ -67,25 +75,19 @@ Filename: "{app}\VMNotify.exe"; Description: "{cm:LaunchApp}"; Flags: nowait pos
 
 [Code]
 procedure InitializeWizard;
+var IntroductionPage: TWizardPage; IntroductionText: TNewStaticText;
 begin
+  IntroductionPage := CreateCustomPage(wpWelcome,
+    CustomMessage('IntroductionTitle'), CustomMessage('IntroductionDescription'));
+  IntroductionText := TNewStaticText.Create(WizardForm);
+  IntroductionText.Parent := IntroductionPage.Surface;
+  IntroductionText.AutoSize := False;
+  IntroductionText.SetBounds(0, 0, IntroductionPage.SurfaceWidth, IntroductionPage.SurfaceHeight);
+  IntroductionText.WordWrap := True;
+  IntroductionText.Caption := CustomMessage('AppIntroduction');
   WizardForm.ReadyMemo.Color := clWhite;
   WizardForm.ReadyMemo.BorderStyle := bsNone;
-  WizardForm.ReadyMemo.ScrollBars := ssNone;
-  WizardForm.ReadyMemo.WordWrap := True;
 end;
-
-function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo,
-  MemoTypeInfo, MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
-begin
-  Result := CustomMessage('AppIntroduction');
-  if MemoUserInfoInfo <> '' then Result := Result + NewLine + NewLine + MemoUserInfoInfo;
-  if MemoDirInfo <> '' then Result := Result + NewLine + NewLine + MemoDirInfo;
-  if MemoTypeInfo <> '' then Result := Result + NewLine + NewLine + MemoTypeInfo;
-  if MemoComponentsInfo <> '' then Result := Result + NewLine + NewLine + MemoComponentsInfo;
-  if MemoGroupInfo <> '' then Result := Result + NewLine + NewLine + MemoGroupInfo;
-  if MemoTasksInfo <> '' then Result := Result + NewLine + NewLine + MemoTasksInfo;
-end;
-
 function HasFramework(const Root, Framework, RequiredFile: String): Boolean;
 var Entry: TFindRec; Base, Patch: String;
 begin
