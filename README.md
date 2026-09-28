@@ -32,7 +32,9 @@ Windows 客户端版本以 `windows/VERSION` 为准；“关于”页面显示�
 
 “关于”支持手动检查 GitHub 最新正式 Release、下载对应程序架构的安装包、启动安装向导和删除已下载文件。首次打开不会自动联网检查。下载保存于系统当前用户的 `%LOCALAPPDATA%\VMNotify\Updates`，退出后仍可管理。下载完成和启动安装前均校验 GitHub Release 提供的 SHA-256；这是完整性校验，不是代码签名。未发布 Release、缺少对应架构附件、网络错误均会显示具体提示。
 
-发布 Windows 更新时，应修改 `windows/VERSION` 并更新日志，运行 `scripts/package-windows.ps1`，在仓库创建 `v版本号` 的正式 Release，上传 `VMNotify-版本号-win-{x86,x64,arm64}-setup.exe`（名称保持不变）及便携包。上传完成后再将 Release 公开；只有 Git 标签或 Actions 构建产物不能被应用的更新检查识别。Linux 代理独立管理版本。
+发布 Windows 更新时，修改 `windows/VERSION`（递增的 `主.次.补丁` 稳定版本号）并更新 `CHANGELOG.md`，将提交推送或合并到 `main`。GitHub Actions 检测到版本变化后，自动运行测试，构建 Windows x86/x64/ARM64 安装版和便携版、Linux x64/ARM64 采集端，校验附件，再创建 `v版本号` Release。附件先上传至草稿，全部成功后才公开；应用内更新会识别对应架构的安装包。
+
+普通代码提交仍执行 CI，但不发布；PR 不发布。失败后可重跑工作流，或在 `main` 手动运行以补发当前版本。已公开的版本不会覆盖，同名标签指向不同提交时会停止；并发发布不会将较旧版本设为最新。发布使用仓库自带 `GITHUB_TOKEN`，无需配置个人令牌，仓库组织策略需允许发布任务使用 `contents: write`。Linux 代理版本取自 `agent/Cargo.toml`，可与 Windows 版本独立。
 
 1. 将对应 Linux 架构的 `vmnotify-agent` 安装到虚拟机桌面用户的 `~/.local/bin/`，并赋予执行权限：
 

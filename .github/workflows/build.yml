@@ -8,6 +8,42 @@ permissions:
   contents: read
 
 jobs:
+  release-plan:
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.plan.outputs.publish }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: plan
+        name: Detect Windows version changes on main
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          $version = (Get-Content windows/VERSION -Raw).Trim()
+          if ($version -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') { throw 'windows/VERSION must be a stable major.minor.patch version' }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          $publish = $false
+          if ($env:GITHUB_REF -eq 'refs/heads/main') {
+            if ($env:EVENT_NAME -eq 'workflow_dispatch') { $publish = $true }
+            elseif ($env:EVENT_NAME -eq 'push') {
+              $previous = ''
+              if ($env:BEFORE_SHA -and $env:BEFORE_SHA -notmatch '^0+$') {
+                $previous = git show "${env:BEFORE_SHA}:windows/VERSION" 2>$null
+                if ($LASTEXITCODE -ne 0) { $previous = ''; $global:LASTEXITCODE = 0 }
+              }
+              $previous = "$previous".Trim()
+              $publish = $version -ne $previous
+              if ($previous -match '^\d+\.\d+\.\d+$' -and $publish -and [version]$version -le [version]$previous) {
+                throw 'Release version must increase'
+              }
+            }
+          }
+          "publish=$($publish.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
   windows:
     runs-on: windows-latest
     steps:
@@ -62,9 +98,68 @@ jobs:
       - name: Package agent
         run: |
           mkdir -p artifacts
-          tar -czf artifacts/VMNotify-0.1.0-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release vmnotify-agent
-          cd artifacts && sha256sum *.tar.gz > SHA256SUMS-linux.txt
+          version=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "vmnotify-agent") | .version')
+          tar -czf "artifacts/VMNotify-$version-${{ matrix.target }}.tar.gz" -C target/${{ matrix.target }}/release vmnotify-agent
+          cd artifacts && sha256sum *.tar.gz > SHA256SUMS-${{ matrix.target }}.txt
       - uses: actions/upload-artifact@v4
         with:
           name: VMNotify-${{ matrix.target }}
           path: artifacts/*
+  release:
+    needs: [release-plan, windows, agent]
+    if: needs.release-plan.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: release-main
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Verify all release artifacts
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.release-plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd release-assets
+          for arch in x86 x64 arm64; do
+            test -s "VMNotify-$RELEASE_VERSION-win-$arch-setup.exe"
+            test -s "VMNotify-$RELEASE_VERSION-win-$arch-portable.zip"
+          done
+          for sums in SHA256SUMS-*.txt; do sha256sum -c "$sums"; done
+      - name: Publish complete release without replacing existing versions
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.release-plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          tag="v$RELEASE_VERSION"
+          git fetch origin --tags
+          if git rev-parse "refs/tags/$tag" >/dev/null 2>&1; then
+            test "$(git rev-list -n 1 "$tag")" = "$GITHUB_SHA" || { echo 'Version tag belongs to another commit'; exit 1; }
+          fi
+          if gh release view "$tag" --json isDraft,targetCommitish > release-state.json 2>/dev/null; then
+            if test "$(jq -r .isDraft release-state.json)" = false; then
+              echo 'This version is already published; leaving it unchanged.'
+              exit 0
+            fi
+            test "$(jq -r .targetCommitish release-state.json)" = "$GITHUB_SHA" || { echo 'Existing draft targets a different commit'; exit 1; }
+          else
+            gh release create "$tag" --target "$GITHUB_SHA" --title "VMNotify $RELEASE_VERSION" --generate-notes --draft
+          fi
+          gh release upload "$tag" release-assets/* --clobber
+          latest=true
+          previous_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name 2>/dev/null || true)
+          if [[ "$previous_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            highest=$(printf '%s\n%s\n' "${previous_tag#v}" "$RELEASE_VERSION" | sort -V | tail -1)
+            if test "$highest" != "$RELEASE_VERSION"; then latest=false; fi
+          fi
+          gh release edit "$tag" --draft=false --latest="$latest"
