@@ -244,11 +244,21 @@
                         <Border Style="{StaticResource Card}"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel Margin="0,0,20,0" VerticalAlignment="Center"><TextBlock Text="登录 Windows 时启动"/><TextBlock Text="登录当前 Windows 账户后运行 VMNotify。" Style="{StaticResource Secondary}"/></StackPanel><CheckBox x:Name="StartupInput" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="登录 Windows 后启动"/>
                         </Grid></Border>
+                        <Border Style="{StaticResource Card}"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,20,0" VerticalAlignment="Center"><TextBlock Text="静默启动"/><TextBlock Text="启动时仅显示托盘图标；双击托盘图标打开窗口。" Style="{StaticResource Secondary}"/></StackPanel>
+                            <CheckBox x:Name="SilentStartupInput" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="静默启动"/>
+                        </Grid></Border>
                         <Border Style="{StaticResource Card}"><StackPanel>
                             <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <StackPanel Margin="0,0,20,0"><TextBlock Text="每天定时连接"/><TextBlock Text="按 Windows 本机时间连接和断开，支持跨午夜。开启后优先于启动自动连接；程序需在托盘运行。" Style="{StaticResource Secondary}"/></StackPanel>
-                                <CheckBox x:Name="ScheduleInput" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="每天定时连接"/>
+                                <StackPanel Margin="0,0,20,0"><TextBlock Text="定时连接"/><TextBlock Text="按 Windows 本机时间连接和断开，支持跨午夜。开启后优先于启动自动连接；程序需在托盘运行。" Style="{StaticResource Secondary}"/></StackPanel>
+                                <CheckBox x:Name="ScheduleInput" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="定时连接"/>
                             </Grid>
+                            <StackPanel Margin="0,14,0,0" IsEnabled="{Binding IsChecked, ElementName=ScheduleInput}">
+                                <TextBlock Text="生效日期" Margin="0,0,0,8"/>
+                                <RadioButton x:Name="EveryDayInput" Content="每天" Foreground="{DynamicResource MainText}" GroupName="ScheduleDays" IsChecked="True" Margin="0,0,0,8"/>
+                                <RadioButton x:Name="ChinaWorkdaysInput" Content="中国工作日（含调休上班，排除节假日和普通周末）" Foreground="{DynamicResource MainText}" GroupName="ScheduleDays"/>
+                                <TextBlock Text="内置 2025–2026 年放假调休安排；其他年份需更新日历数据。跨午夜时段按开始日期判断。" Style="{StaticResource Secondary}" Margin="0,8,0,0"/>
+                            </StackPanel>
                             <WrapPanel Margin="0,14,0,0" IsEnabled="{Binding IsChecked, ElementName=ScheduleInput}">
                                 <TextBlock Text="连接时间" VerticalAlignment="Center" Margin="0,0,10,0"/><TextBox x:Name="ConnectTimeInput" Width="85" MaxLength="5" AutomationProperties.Name="连接时间 HH:mm"/>
                                 <TextBlock Text="断开时间" VerticalAlignment="Center" Margin="22,0,10,0"/><TextBox x:Name="DisconnectTimeInput" Width="85" MaxLength="5" AutomationProperties.Name="断开时间 HH:mm"/>

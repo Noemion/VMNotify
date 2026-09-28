@@ -10,13 +10,17 @@ public sealed record Settings
     public string IdentityFile { get; init; } = "";
     public string AgentPath { get; init; } = ".local/bin/vmnotify-agent";
     public bool AutoConnect { get; init; } = true;
+    public bool SilentStartup { get; init; }
     public string[] EnabledApps { get; init; } = [];
     public bool ScheduleEnabled { get; init; }
+    [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<ScheduleDays>))]
+    public ScheduleDays ScheduleDays { get; init; } = ScheduleDays.EveryDay;
     public string ConnectTime { get; init; } = "09:00";
     public string DisconnectTime { get; init; } = "18:00";
 
     public void Validate()
     {
+        if (!Enum.IsDefined(ScheduleDays)) throw new ArgumentException("无效的定时连接生效日期模式。");
         if (ScheduleEnabled) _ = DailySchedule.Parse(ConnectTime, DisconnectTime);
         if (!Regex.IsMatch(Host, @"\A[a-zA-Z0-9][a-zA-Z0-9.:%_-]{0,252}\z") || Host.Contains('\n'))
             throw new ArgumentException("主机填写 IP 或主机名，不包含用户名或空格");

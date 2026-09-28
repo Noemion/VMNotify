@@ -87,6 +87,9 @@ public partial class MainWindow : Window
         HostInput.Text = saved.Host; UserInput.Text = saved.User; PortInput.Text = saved.Port.ToString();
         IdentityInput.Text = saved.IdentityFile; AgentInput.Text = saved.AgentPath; AutoConnectInput.IsChecked = saved.AutoConnect;
         ScheduleInput.IsChecked = saved.ScheduleEnabled;
+        SilentStartupInput.IsChecked = saved.SilentStartup;
+        EveryDayInput.IsChecked = saved.ScheduleDays == ScheduleDays.EveryDay;
+        ChinaWorkdaysInput.IsChecked = saved.ScheduleDays == ScheduleDays.ChinaWorkdays;
         ConnectTimeInput.Text = saved.ConnectTime;
         DisconnectTimeInput.Text = saved.DisconnectTime;
         enabled = new(saved.EnabledApps); receiver.SetEnabledApps(enabled.ToArray());
@@ -112,12 +115,7 @@ public partial class MainWindow : Window
             }
         };
         if (!preview) timer.Start();
-        Loaded += async (_, _) => {
-            loaded = true;
-            if (preview) return;
-            if (saved.ScheduleEnabled) await EvaluateSchedule();
-            else if (saved.AutoConnect && saved.Host.Length > 0) await Connect();
-        };
+        Loaded += async (_, _) => await StartBackground();
         Closing += (_, e) => { if (!quitting) { e.Cancel = true; Hide(); } };
         Closed += (_, _) => {
             updateLifetime.Cancel(); updateClient.Dispose();
@@ -131,6 +129,22 @@ public partial class MainWindow : Window
             MaximizeButton.Content = maximized ? "\uE923" : "\uE922";
             MaximizeButton.ToolTip = maximized ? "还原" : "最大化";
         };
+    }
+
+    internal bool StartsInTray => !previewMode && saved.SilentStartup;
+    internal async Task StartInTray()
+    {
+        // Create the native handle for shutdown messages without ever showing the window.
+        new WindowInteropHelper(this).EnsureHandle();
+        await StartBackground();
+    }
+    private async Task StartBackground()
+    {
+        if (loaded) return;
+        loaded = true;
+        if (previewMode) return;
+        if (saved.ScheduleEnabled) await EvaluateSchedule();
+        else if (saved.AutoConnect && saved.Host.Length > 0) await Connect();
     }
 
     private void ShowWindow() { Show(); WindowState = WindowState.Normal; Activate(); }
@@ -241,9 +255,9 @@ public partial class MainWindow : Window
             await Stop(); if (quitting) return;
             pausedWindow = null; scheduleRetryAfter = DateTime.MinValue;
             if (!cfg.ScheduleEnabled) scheduleStatus = "";
-            if (!cfg.ScheduleEnabled || DailySchedule.Parse(cfg.ConnectTime, cfg.DisconnectTime).WindowStart(DateTime.Now) != null) {
+            if (!cfg.ScheduleEnabled || DailySchedule.Parse(cfg.ConnectTime, cfg.DisconnectTime).WindowStart(DateTime.Now, saved.ScheduleDays) != null) {
                 cancellation = new(); running = receiver.Run(cfg, cancellation.Token);
-            } else scheduleStatus = $"等待每日 {cfg.ConnectTime} 自动连接（本机时间）";
+            } else scheduleStatus = $"等待{ScheduleDaysLabel} {cfg.ConnectTime} 自动连接（本机时间）";
             SelectPage(0);
         } catch (Exception ex) { WpfMessageBox.Show(this, ex.Message, "VMNotify", MessageBoxButton.OK, MessageBoxImage.Warning); }
         finally { busy = false; SaveConnect.IsEnabled = QuickConnect.IsEnabled = true; RefreshStatus(); }
@@ -254,8 +268,8 @@ public partial class MainWindow : Window
         if (busy || previewMode) return;
         busy = true; SaveGeneral.IsEnabled = false;
         try {
-            var cfg = saved with { AutoConnect = AutoConnectInput.IsChecked == true,
-                ScheduleEnabled = ScheduleInput.IsChecked == true,
+            var cfg = saved with { AutoConnect = AutoConnectInput.IsChecked == true, SilentStartup = SilentStartupInput.IsChecked == true,
+                ScheduleEnabled = ScheduleInput.IsChecked == true, ScheduleDays = ChinaWorkdaysInput.IsChecked == true ? ScheduleDays.ChinaWorkdays : ScheduleDays.EveryDay,
                 ConnectTime = ConnectTimeInput.Text.Trim(), DisconnectTime = DisconnectTimeInput.Text.Trim() };
             if (cfg.ScheduleEnabled) _ = DailySchedule.Parse(cfg.ConnectTime, cfg.DisconnectTime);
             var previous = saved;
@@ -264,7 +278,7 @@ public partial class MainWindow : Window
             using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run")) {
                 if (StartupInput.IsChecked == true) key.SetValue("VMNotify", StartupCommand()); else key.DeleteValue("VMNotify", false);
             }
-            if (previous.ScheduleEnabled != cfg.ScheduleEnabled || previous.ConnectTime != cfg.ConnectTime || previous.DisconnectTime != cfg.DisconnectTime) {
+            if (previous.ScheduleDays != cfg.ScheduleDays || previous.ScheduleEnabled != cfg.ScheduleEnabled || previous.ConnectTime != cfg.ConnectTime || previous.DisconnectTime != cfg.DisconnectTime) {
                 pausedWindow = null; scheduleRetryAfter = DateTime.MinValue;
             }
             if (!cfg.ScheduleEnabled) scheduleStatus = "";
@@ -275,6 +289,7 @@ public partial class MainWindow : Window
         RefreshStatus();
     }
 
+    private string ScheduleDaysLabel => saved.ScheduleDays == ScheduleDays.ChinaWorkdays ? "中国工作日" : "每天";
     private async Task EvaluateSchedule()
     {
         if (!loaded || previewMode || busy || quitting || !saved.ScheduleEnabled) return;
@@ -282,15 +297,16 @@ public partial class MainWindow : Window
         busy = true;
         try {
             var now = DateTime.Now;
-            var window = DailySchedule.Parse(saved.ConnectTime, saved.DisconnectTime).WindowStart(now);
-            scheduleStatus = window == null ? $"等待每日 {saved.ConnectTime} 自动连接（本机时间）"
+            var window = DailySchedule.Parse(saved.ConnectTime, saved.DisconnectTime).WindowStart(now, saved.ScheduleDays);
+            scheduleStatus = window == null ? $"等待{ScheduleDaysLabel} {saved.ConnectTime} 自动连接（本机时间）"
                 : pausedWindow == window ? "本时段已手动断开，下个时段自动连接"
-                : $"每日 {saved.ConnectTime}–{saved.DisconnectTime} 连接（本机时间）";
+                : $"{ScheduleDaysLabel} {saved.ConnectTime}–{saved.DisconnectTime} 连接（本机时间）";
             if (window == null) { if (cancellation != null) await Stop(); return; }
             if (pausedWindow == window || cancellation != null || now < scheduleRetryAfter) return;
             saved.Validate(); Receiver.SshPath();
             cancellation = new(); running = receiver.Run(saved, cancellation.Token);
         } catch (Exception ex) {
+            if (cancellation != null) await Stop();
             scheduleStatus = "定时连接配置有误：" + ex.Message;
             scheduleRetryAfter = DateTime.Now.AddMinutes(1);
         } finally { busy = false; }

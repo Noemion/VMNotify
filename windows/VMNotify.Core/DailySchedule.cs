@@ -21,4 +21,14 @@ public sealed record DailySchedule(TimeOnly Start, TimeOnly End)
         if (time >= Start) return localNow.Date + Start.ToTimeSpan();
         return time < End ? localNow.Date.AddDays(-1) + Start.ToTimeSpan() : null;
     }
+
+    public DateTime? WindowStart(DateTime localNow, ScheduleDays days)
+    {
+        if (!Enum.IsDefined(days)) throw new ArgumentException("无效的定时连接生效日期模式。");
+        var window = WindowStart(localNow);
+        if (days == ScheduleDays.EveryDay) return window;
+        // Check the start date of an overnight period, including across New Year.
+        var date = DateOnly.FromDateTime(window ?? localNow);
+        return ChinaWorkCalendar.IsWorkday(date) ? window : null;
+    }
 }

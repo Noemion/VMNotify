@@ -17,6 +17,11 @@ internal static class Program
                 window.QuitForPreview();
             };
         }
-        app.Run(window);
+        if (window.StartsInTray) {
+            app.MainWindow = window;
+            app.ShutdownMode = System.Windows.ShutdownMode.OnMainWindowClose;
+            app.Startup += async (_, _) => await window.StartInTray();
+            app.Run();
+        } else app.Run(window);
     }
 }
