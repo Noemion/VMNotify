@@ -1,5 +1,10 @@
 using VMNotify;
 
+if (args.Length == 4 && args[0] == "--ssh-authorization") {
+    await SshAuthorizationTests.Integration(args[1], args[2], int.Parse(args[3]));
+    return;
+}
+
 if (args.Length == 4 && args[0] == "--ssh-names") {
     System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
     Console.OutputEncoding = System.Text.Encoding.GetEncoding(936);
@@ -106,3 +111,4 @@ Console.WriteLine("All protocol, framing and SSH argument tests passed.");
 await UpdateTests.Run();
 TimingTests.Run();
 CalendarTests.Run();
+SshAuthorizationTests.Run();

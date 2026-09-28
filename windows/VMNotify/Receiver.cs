@@ -17,6 +17,9 @@ internal sealed class Receiver
     }
     private readonly Dictionary<string, Alert> activeAlerts = new();
     private readonly TimeProvider clock;
+    public Func<string, CancellationToken, Task<bool>>? ConfirmHost { get; set; }
+    public string? AuthorizationHelper { get; set; }
+    private sealed class AuthorizationRejectedException : Exception;
     public Receiver(TimeProvider? clock = null) { this.clock = clock ?? TimeProvider.System; }
     public void QueueReminders() {
         lock (selectionLock) {
@@ -78,10 +81,12 @@ internal sealed class Receiver
     public async Task Run(Settings settings, CancellationToken stop)
     {
         int retry = 1;
+        bool rejected = false;
         while (!stop.IsCancellationRequested)
         {
             var started = Stopwatch.StartNew();
             try { await Session(settings, stop); }
+            catch (AuthorizationRejectedException) { rejected = true; break; }
             catch (OperationCanceledException) when (stop.IsCancellationRequested) { break; }
             catch (Exception ex) { SetStatus("连接中断：" + ex.Message[..Math.Min(300, ex.Message.Length)]); }
             if (stop.IsCancellationRequested) break;
@@ -91,7 +96,7 @@ internal sealed class Receiver
             catch (OperationCanceledException) { break; }
             retry = Math.Min(30, retry * 2);
         }
-        SetStatus("已断开");
+        SetStatus(rejected ? "SSH 授权已取消；点击“保存并连接”重试" : "已断开");
         Volatile.Write(ref availableApps, []);
     }
 
@@ -103,11 +108,19 @@ internal sealed class Receiver
         var info = new ProcessStartInfo(SshPath()) { RedirectStandardOutput = true, RedirectStandardError = true,
             RedirectStandardInput = true, UseShellExecute = false, CreateNoWindow = true,
             StandardOutputEncoding = new UTF8Encoding(false, true), StandardErrorEncoding = Encoding.UTF8 };
-        foreach (var arg in settings.SshArguments()) info.ArgumentList.Add(arg);
+        bool authorize = ConfirmHost != null && AuthorizationHelper != null;
+        foreach (var arg in settings.SshArguments(authorize)) info.ArgumentList.Add(arg);
+        using var session = CancellationTokenSource.CreateLinkedTokenSource(stop);
+        using var authorization = authorize ? new SshAuthorization(info, AuthorizationHelper!) : null;
         using var process = Process.Start(info) ?? throw new IOException("无法启动 SSH");
         process.StandardInput.Close();
-        using var session = CancellationTokenSource.CreateLinkedTokenSource(stop);
         session.CancelAfter(TimeSpan.FromSeconds(45));
+        var authorizationTask = authorization?.Listen(async (prompt, ct) => {
+            session.CancelAfter(Timeout.InfiniteTimeSpan);
+            SetStatus("等待确认 SSH 主机指纹…");
+            try { return await ConfirmHost!(prompt, ct); }
+            finally { if (!ct.IsCancellationRequested) session.CancelAfter(TimeSpan.FromSeconds(45)); }
+        }, session.Token) ?? Task.CompletedTask;
         string lastError = "SSH 已结束，请检查密钥登录、主机指纹和代理路径";
         var errors = Task.Run(async () => {
             var chars = new char[512];
@@ -130,6 +143,7 @@ internal sealed class Receiver
                 if (ev.Kind == "apps") Volatile.Write(ref availableApps, ev.Apps!);
                 if (ev.Kind == "cleared" || (ev.Kind == "attention" && ready)) ApplyAttention(ev);
             }
+            if (authorization?.Rejected == true) throw new AuthorizationRejectedException();
             throw new IOException(Volatile.Read(ref lastError));
         }
         catch (OperationCanceledException) when (!stop.IsCancellationRequested)
@@ -141,6 +155,7 @@ internal sealed class Receiver
             try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
             await process.WaitForExitAsync(CancellationToken.None);
             await errors;
+            await authorizationTask;
         }
     }
 }

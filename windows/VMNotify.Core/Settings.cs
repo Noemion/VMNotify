@@ -34,10 +34,12 @@ public sealed record Settings
     // OpenSSH passes the remote command to a POSIX shell, even with ArgumentList.
     public static string ShellQuote(string value) => "'" + value.Replace("'", "'\"'\"'") + "'";
 
-    public string[] SshArguments()
+    public string[] SshArguments(bool authorizeHost = false)
     {
         Validate();
-        var args = new List<string> { "-T", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
+        var args = new List<string> { "-T", "-o", authorizeHost ? "BatchMode=no" : "BatchMode=yes", "-o", authorizeHost ? "StrictHostKeyChecking=ask" : "StrictHostKeyChecking=yes",
+            "-o", "PasswordAuthentication=no", "-o", "KbdInteractiveAuthentication=no", "-o", "PreferredAuthentications=publickey",
+            "-o", "UpdateHostKeys=no", "-o", "FingerprintHash=sha256",
             "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=3",
             "-p", Port.ToString(), "-l", User };
         if (IdentityFile.Length > 0) args.AddRange(["-i", IdentityFile]);

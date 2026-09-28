@@ -4,8 +4,10 @@ using System.Text.Json;
 
 namespace VMNotify;
 
-public record AvailableApp(string Id, string Name, bool Running, string Adapter, string Capability)
+public record AvailableApp(string Id, string Name, bool Running, string Adapter, string Capability, bool Verified = false)
 {
+    public string Description => !Running ? "已安装，等待应用启动" : Verified
+        ? "正在监听 · 已验证适配 · 仅转发提醒" : "正在监听 · 自动探测 · 消息识别效果待验证";
     public override string ToString() => $"{Name} — {(Running ? "正在监听" : "已安装，未运行")}（仅提醒）";
 }
 
@@ -41,7 +43,8 @@ public record AgentEvent(string Kind, string? AppId, string? AppName, AvailableA
                 if (appId.Length is < 1 or > 64 || !appId.All(c => char.IsAsciiLetterOrDigit(c) || "-_.".Contains(c))
                     || appName.Length is < 1 or > 128 || appName.Any(char.IsControl)
                     || adapter.Length > 64 || capability != "attention-only") throw new InvalidDataException("无效的应用列表");
-                return new AvailableApp(appId, appName, item.GetProperty("running").GetBoolean(), adapter, capability);
+                return new AvailableApp(appId, appName, item.GetProperty("running").GetBoolean(), adapter, capability,
+                    item.TryGetProperty("verified", out var verified) && verified.GetBoolean());
             }).ToArray();
             if (apps.Select(a => a.Id).Distinct().Count() != apps.Length) throw new InvalidDataException("重复的应用 ID");
         }

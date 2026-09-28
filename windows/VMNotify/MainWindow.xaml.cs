@@ -50,6 +50,8 @@ public partial class MainWindow : Window
         previewMode = preview;
         if (!preview) Diagnostics.Write("Application started");
         InitializeComponent();
+        receiver.AuthorizationHelper = Environment.ProcessPath;
+        receiver.ConfirmHost = ConfirmSshHost;
         var build = typeof(MainWindow).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
             .Cast<System.Reflection.AssemblyInformationalVersionAttribute>().Single().InformationalVersion;
         InitializeAbout(build);
@@ -205,7 +207,7 @@ public partial class MainWindow : Window
     private void RenderApps(AvailableApp[] apps)
     {
         displayed = apps;
-        AppItems.ItemsSource = apps.Select(a => new AppChoice { Id = a.Id, Name = a.Name, Enabled = enabled.Contains(a.Id), Detail = a.Running ? "正在监听  ·  仅转发提醒" : "已安装，等待应用启动" }).ToArray();
+        AppItems.ItemsSource = apps.Select(a => new AppChoice { Id = a.Id, Name = a.Name, Enabled = enabled.Contains(a.Id), Detail = a.Description }).ToArray();
         EmptyApps.Visibility = apps.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         AppListHeading.Text = apps.Length == 0 ? "可转发的应用" : $"可转发的应用（{apps.Length}）";
     }
@@ -364,7 +366,8 @@ public partial class MainWindow : Window
         Directory.CreateDirectory(directory);
         // Preview data is illustrative, never saved or connected to a real machine.
         HostInput.Text = "192.0.2.10"; UserInput.Text = "desktop-user";
-        RenderApps([new("lanxin", "蓝信", true, "status-notifier-flash", "attention-only")]);
+        RenderApps([new("lanxin", "蓝信", true, "status-notifier-flash", "attention-only", true),
+            new("auto-preview", "自动发现的应用", true, "status-notifier-auto", "attention-only")]);
         StatusTitle.Text = "正在接收虚拟机提醒"; StatusDetail.Text = "已连接。应用提醒会自动转发到这台电脑。";
         StatusIcon.Text = "\uE73E"; HostSummary.Text = "192.0.2.10"; AppsSummary.Text = "1 个应用已开启转发"; QuickConnect.Content = "重新连接";
         ConnectionLabel.Text = "已连接"; ConnectionDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "Accent");
@@ -378,6 +381,7 @@ public partial class MainWindow : Window
         }
         foreach (bool light in new[] { false, true }) {
             SystemTheme.Apply(this, light);
+            await PreviewSshHost(directory, light);
             UpdateLayout();
             if (((SolidColorBrush)OverviewNav.Foreground).Color != ((SolidColorBrush)Resources["MainText"]).Color
                 || ((SolidColorBrush)AutoConnectInput.Foreground).Color != ((SolidColorBrush)Resources["MainText"]).Color)

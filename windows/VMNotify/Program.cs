@@ -5,6 +5,10 @@ internal static class Program
     [STAThread]
     static void Main(string[] args)
     {
+        if (Environment.GetEnvironmentVariable(SshAuthorization.PipeVariable) is { Length: > 0 } pipe) {
+            Environment.ExitCode = args.Length == 1 ? SshAuthorization.RunHelper(pipe, args[0]).GetAwaiter().GetResult() : 1;
+            return;
+        }
         bool preview = args.Length == 2 && args[0] == "--preview";
         using var mutex = new Mutex(true, preview ? @"Local\VMNotify.Preview" : @"Local\VMNotify.Desktop", out bool first);
         if (!first) return;

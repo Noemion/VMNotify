@@ -45,6 +45,7 @@ pub struct AvailableApp {
     pub running: bool,
     pub adapter: &'static str,
     pub capability: &'static str,
+    pub verified: bool,
 }
 
 pub fn builtin_apps() -> Vec<App> {
@@ -66,9 +67,63 @@ pub fn inventory(apps: &[App], running: impl Fn(&str) -> bool) -> Vec<AvailableA
                 running,
                 adapter: "status-notifier-flash",
                 capability: "attention-only",
+                verified: app.id == "lanxin" && app.process == "LxGtk3Plugin",
             })
         })
         .collect()
+}
+
+/// Stable across restarts and independent of D-Bus owner/PID and window titles.
+pub fn automatic_app(executable: &str, process: &str, name: &str) -> App {
+    let identity = if executable.is_empty() {
+        process
+    } else {
+        executable
+    };
+    let hash = identity.bytes().fold(0xcbf29ce484222325u64, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x100000001b3)
+    });
+    let clean: String = name.chars().filter(|c| !c.is_control()).take(64).collect();
+    App {
+        id: format!("auto-{hash:016x}"),
+        name: if clean.trim().is_empty() {
+            process
+                .chars()
+                .filter(|c| !c.is_control())
+                .take(64)
+                .collect()
+        } else {
+            clean
+        },
+        process: process.into(),
+        executable: None,
+    }
+}
+
+pub fn live_inventory<'a>(
+    configured: &[App],
+    live: impl Iterator<Item = &'a App>,
+) -> Vec<AvailableApp> {
+    let live: Vec<_> = live.collect();
+    let mut result = inventory(configured, |id| live.iter().any(|a| a.id == id));
+    for app in live {
+        if result.iter().any(|a| a.id == app.id) {
+            continue;
+        }
+        result.push(AvailableApp {
+            id: app.id.clone(),
+            name: app.name.clone(),
+            running: true,
+            adapter: "status-notifier-auto",
+            capability: "attention-only",
+            verified: false,
+        });
+    }
+    // Keep every live app in the bounded snapshot before offline installation hints.
+    result.sort_by(|a, b| b.running.cmp(&a.running).then(a.id.cmp(&b.id)));
+    result.truncate(64);
+    result.sort_by(|a, b| a.id.cmp(&b.id));
+    result
 }
 
 #[cfg(test)]

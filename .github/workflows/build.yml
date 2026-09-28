@@ -116,6 +116,10 @@ jobs:
       - run: cargo build --release --locked --target ${{ matrix.target }}
       - name: Verify repeated flash cycles on an isolated D-Bus
         run: /usr/bin/python3 scripts/test-icon-cycles.py target/${{ matrix.target }}/release/vmnotify-agent
+      - name: Verify automatic application discovery
+        run: |
+          /usr/bin/python3 scripts/test-auto-discovery.py target/${{ matrix.target }}/release/vmnotify-agent
+          /usr/bin/python3 scripts/test-auto-discovery.py target/${{ matrix.target }}/release/vmnotify-agent --icon-name
       - name: Package agent
         run: |
           mkdir -p artifacts
