@@ -1,11 +1,13 @@
 param(
     [ValidateSet('x86','x64','arm64')][string[]]$Architectures = @('x86','x64','arm64'),
-    [ValidatePattern('^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$')][string]$Version = '0.1.0',
+    [string]$Version = '',
     [string]$Iscc = 'ISCC.exe',
     [string]$OutputDirectory = ''
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
+if (!$Version) { $Version = (Get-Content (Join-Path $repoRoot 'windows\VERSION') -Raw).Trim() }
+if ($Version -notmatch '^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$') { throw 'Invalid Windows version' }
 if (!$OutputDirectory) { $OutputDirectory = Join-Path $repoRoot 'artifacts' }
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Force $OutputDirectory | Out-Null

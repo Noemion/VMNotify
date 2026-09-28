@@ -28,6 +28,12 @@ Windows: 设置/应用选择 ← 应用清单 ← 事件读取与去重 ←─�
 
 ## 使用
 
+Windows 客户端版本以 `windows/VERSION` 为准；界面左下角与“关于”页面显示当前版本，“关于”还显示架构和 Git 构建标识。更新记录见 `CHANGELOG.md`。
+
+“关于”支持手动检查 GitHub 最新正式 Release、下载对应程序架构的安装包、启动安装向导和删除已下载文件。首次打开不会自动联网检查。下载保存于系统当前用户的 `%LOCALAPPDATA%\VMNotify\Updates`，退出后仍可管理。下载完成和启动安装前均校验 GitHub Release 提供的 SHA-256；这是完整性校验，不是代码签名。未发布 Release、缺少对应架构附件、网络错误均会显示具体提示。
+
+发布 Windows 更新时，应修改 `windows/VERSION` 并更新日志，运行 `scripts/package-windows.ps1`，在仓库创建 `v版本号` 的正式 Release，上传 `VMNotify-版本号-win-{x86,x64,arm64}-setup.exe`（名称保持不变）及便携包。上传完成后再将 Release 公开；只有 Git 标签或 Actions 构建产物不能被应用的更新检查识别。Linux 代理独立管理版本。
+
 1. 将对应 Linux 架构的 `vmnotify-agent` 安装到虚拟机桌面用户的 `~/.local/bin/`，并赋予执行权限：
 
    ```sh

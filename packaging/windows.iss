@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.1.0"
+  #error AppVersion must be supplied by scripts/package-windows.ps1
 #endif
 #ifndef Arch
   #define Arch "x64"

@@ -91,3 +91,4 @@ foreach (var input in new[] { new string('x', 32769), "truncated" }) {
     Assert(rejected, "unbounded or truncated input accepted");
 }
 Console.WriteLine("All protocol, framing and SSH argument tests passed.");
+await UpdateTests.Run();

@@ -47,6 +47,11 @@ public partial class MainWindow : Window
         previewMode = preview;
         if (!preview) Diagnostics.Write("Application started");
         InitializeComponent();
+        var build = typeof(MainWindow).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .Cast<System.Reflection.AssemblyInformationalVersionAttribute>().Single().InformationalVersion;
+        VersionLabel.Text = "版本 " + build.Split('+')[0];
+        VersionLabel.ToolTip = build;
+        InitializeAbout(build);
         SystemTheme.Apply(this, SystemTheme.IsLight());
         SourceInitialized += (_, _) => {
             windowSource = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
@@ -95,6 +100,7 @@ public partial class MainWindow : Window
         Loaded += async (_, _) => { if (!preview && saved.AutoConnect && saved.Host.Length > 0) await Connect(); };
         Closing += (_, e) => { if (!quitting) { e.Cancel = true; Hide(); } };
         Closed += (_, _) => {
+            updateLifetime.Cancel(); updateClient.Dispose();
             timer.Stop(); scrollIdle.Stop(); cancellation?.Cancel(); tray.Dispose(); trayIcon.Dispose();
             if (!preview) SystemEvents.UserPreferenceChanged -= ThemeChanged;
             windowSource?.RemoveHook(WindowMessage);
@@ -126,17 +132,18 @@ public partial class MainWindow : Window
         OverviewPage.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
         ConnectionPage.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
         AppsPage.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
+        AboutPage.Visibility = index == 3 ? Visibility.Visible : Visibility.Collapsed;
         ConnectionFooter.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
-        PageTitle.Text = new[] { "概览", "连接设置", "应用管理" }[index];
-        PageDescription.Text = new[] { "管理虚拟机连接与应用通知。", "设置与 Linux 虚拟机的连接方式。", "选择哪些应用可以在这台电脑上提醒你。" }[index];
+        PageTitle.Text = new[] { "概览", "连接设置", "应用管理", "关于" }[index];
+        PageDescription.Text = new[] { "管理虚拟机连接与应用通知。", "设置与 Linux 虚拟机的连接方式。", "选择哪些应用可以在这台电脑上提醒你。", "版本与更新" }[index];
         if (index == 0) OverviewNav.IsChecked = true;
         else if (index == 1) ConnectionNav.IsChecked = true;
-        else AppsNav.IsChecked = true;
+        else if (index == 2) AppsNav.IsChecked = true;
+        else AboutNav.IsChecked = true;
     }
     private void OverviewClicked(object sender, RoutedEventArgs e) => SelectPage(0);
     private void ConnectionClicked(object sender, RoutedEventArgs e) => SelectPage(1);
     private void AppsClicked(object sender, RoutedEventArgs e) => SelectPage(2);
-    private void ProjectClicked(object sender, RoutedEventArgs e) => Process.Start(new ProcessStartInfo("https://github.com/Noemion/VMNotify") { UseShellExecute = true });
     private void ShowNotification(string title, string text)
     {
         Diagnostics.Write("Requesting Windows balloon; visible=" + tray.Visible);
@@ -245,7 +252,7 @@ public partial class MainWindow : Window
         RenderApps([new("lanxin", "蓝信", true, "status-notifier-flash", "attention-only")]);
         StatusTitle.Text = "正在接收虚拟机提醒"; StatusDetail.Text = "已连接。应用提醒会自动转发到这台电脑。";
         StatusIcon.Text = "\uE73E"; SidebarStatus.Text = "●  已连接"; HostSummary.Text = "192.0.2.10"; AppsSummary.Text = "1 个应用已开启转发"; QuickConnect.Content = "重新连接";
-        string[] names = ["overview", "connection", "apps"];
+        string[] names = ["overview", "connection", "apps", "about"];
         void Capture(string name) {
             UpdateLayout();
             var bitmap = new RenderTargetBitmap((int)Root.ActualWidth, (int)Root.ActualHeight, 96, 96, PixelFormats.Pbgra32);
@@ -259,7 +266,7 @@ public partial class MainWindow : Window
             if (((SolidColorBrush)OverviewNav.Foreground).Color != ((SolidColorBrush)Resources["MainText"]).Color
                 || ((SolidColorBrush)AutoConnectInput.Foreground).Color != ((SolidColorBrush)Resources["MainText"]).Color)
                 throw new InvalidOperationException("Control text did not follow theme");
-            for (int i = 0; i < 3; i++) {
+            for (int i = 0; i < names.Length; i++) {
                 SelectPage(i); UpdateLayout(); await Task.Delay(150); HideScrollbarImmediately();
                 Capture(names[i] + (light ? "-light" : "-dark"));
             }
