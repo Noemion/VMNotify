@@ -34,9 +34,21 @@ UninstallDisplayIcon={app}\VMNotify.exe
 SetupIconFile=..\windows\VMNotify\Assets\VMNotify.ico
 CloseApplications=yes
 RestartApplications=no
+LanguageDetectionMethod=uilanguage
+ShowLanguageDialog=no
+UsePreviousLanguage=no
 
 [Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+
+[CustomMessages]
+english.UninstallApp=Uninstall VMNotify
+chinesesimplified.UninstallApp=卸载 VMNotify
+english.LaunchApp=Launch VMNotify
+chinesesimplified.LaunchApp=启动 VMNotify
+english.RuntimeRequired=VMNotify requires .NET Desktop Runtime 10.0 ({#Arch}).%nInstall the latest 10.0 Desktop Runtime for this architecture, then click Install to retry.%nDownload: https://dotnet.microsoft.com/download/dotnet/10.0
+chinesesimplified.RuntimeRequired=VMNotify 需要 .NET Desktop Runtime 10.0（{#Arch}）。%n请安装此架构对应的最新 10.0 桌面运行时，然后点击“安装”重试。%n下载地址：https://dotnet.microsoft.com/download/dotnet/10.0
 
 #include "legacy-runtime-cleanup.iss"
 
@@ -46,10 +58,10 @@ Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 
 [Icons]
 Name: "{group}\VMNotify"; Filename: "{app}\VMNotify.exe"
-Name: "{group}\卸载 VMNotify"; Filename: "{uninstallexe}"
+Name: "{group}\{cm:UninstallApp}"; Filename: "{uninstallexe}"
 
 [Run]
-Filename: "{app}\VMNotify.exe"; Description: "启动 VMNotify"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\VMNotify.exe"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent
 
 [Code]
 function HasFramework(const Root, Framework, RequiredFile: String): Boolean;
@@ -106,9 +118,7 @@ function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
   if not HasDesktopRuntime then
-    Result := 'VMNotify 需要 .NET Desktop Runtime 10.0（{#Arch}）。' + #13#10 +
-      '请安装此架构对应的最新 10.0 桌面运行时，然后点击“安装”重试。' + #13#10 +
-      '下载地址：https://dotnet.microsoft.com/download/dotnet/10.0';
+    Result := CustomMessage('RuntimeRequired');
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
