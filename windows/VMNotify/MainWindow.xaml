@@ -138,7 +138,7 @@
 
     <Grid x:Name="Root" Background="{DynamicResource WindowBackground}">
         <Grid.RowDefinitions><RowDefinition Height="40"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-        <Grid.ColumnDefinitions><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Grid Grid.Row="0" Grid.ColumnSpan="2" Background="{DynamicResource WindowBackground}">
             <StackPanel Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
                 <Image Source="Assets/VMNotify.ico" Width="18" Height="18" RenderOptions.BitmapScalingMode="HighQuality"/>
@@ -207,7 +207,7 @@
                         </Grid></Border>
                         <TextBlock Text="最近提醒" FontWeight="SemiBold" Margin="0,25,0,10"/>
                         <Border Style="{StaticResource Card}"><StackPanel><TextBlock x:Name="LastNotification" Text="还没有收到提醒"/><TextBlock Text="来自虚拟机的应用提醒会出现在 Windows 通知中。" Style="{StaticResource Secondary}"/></StackPanel></Border>
-                        <StackPanel Orientation="Horizontal" Margin="0,22,0,0"><Button Content="测试本机通知" Click="TestClicked"/><TextBlock Text="关闭窗口后，仍在系统托盘中运行。" Style="{StaticResource Secondary}" VerticalAlignment="Center" Margin="16,0,0,0"/></StackPanel>
+                        <Grid Margin="0,22,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Button Content="测试本机通知" Click="TestClicked"/><TextBlock Grid.Column="1" Text="关闭窗口后，仍在系统托盘中运行。" Style="{StaticResource Secondary}" VerticalAlignment="Center" Margin="16,0,0,0"/></Grid>
                     </StackPanel>
 
                     <StackPanel x:Name="ConnectionPage" Visibility="Collapsed">
