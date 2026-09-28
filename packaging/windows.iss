@@ -35,6 +35,9 @@ SetupIconFile=..\windows\VMNotify\Assets\VMNotify.ico
 CloseApplications=yes
 RestartApplications=no
 
+[Languages]
+Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+
 #include "legacy-runtime-cleanup.iss"
 
 [Files]
@@ -103,9 +106,9 @@ function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
   if not HasDesktopRuntime then
-    Result := 'VMNotify requires .NET Desktop Runtime 10.0 ({#Arch}).' + #13#10 +
-      'Install the latest 10.0 Desktop Runtime for this architecture, then click Install to retry.' + #13#10 +
-      'Download: https://dotnet.microsoft.com/download/dotnet/10.0';
+    Result := 'VMNotify 需要 .NET Desktop Runtime 10.0（{#Arch}）。' + #13#10 +
+      '请安装此架构对应的最新 10.0 桌面运行时，然后点击“安装”重试。' + #13#10 +
+      '下载地址：https://dotnet.microsoft.com/download/dotnet/10.0';
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
