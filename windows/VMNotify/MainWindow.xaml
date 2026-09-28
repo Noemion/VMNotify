@@ -243,7 +243,7 @@
                         <Border Style="{StaticResource Card}" Background="{DynamicResource InfoBackground}" Margin="0,0,0,18">
                             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="30"/><ColumnDefinition/></Grid.ColumnDefinitions>
                                 <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" Foreground="{DynamicResource Accent}" FontSize="17" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="1" Text="自动发现虚拟机中受支持的应用。开关即时生效，选择会自动保存。" Foreground="{DynamicResource Muted}" FontSize="14"/>
+                                <TextBlock Grid.Column="1" Text="自动发现虚拟机中受支持的应用。开关即时生效，选择会自动保存。" Foreground="{DynamicResource Muted}" FontSize="14" VerticalAlignment="Center" TextWrapping="Wrap"/>
                             </Grid>
                         </Border>
                         <TextBlock x:Name="AppListHeading" Text="可转发的应用" FontWeight="SemiBold" Margin="0,0,0,10"/>

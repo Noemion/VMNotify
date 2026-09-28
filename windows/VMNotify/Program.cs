@@ -5,7 +5,8 @@ internal static class Program
     [STAThread]
     static void Main(string[] args)
     {
-        using var mutex = new Mutex(true, @"Local\VMNotify.Desktop", out bool first);
+        bool preview = args.Length == 2 && args[0] == "--preview";
+        using var mutex = new Mutex(true, preview ? @"Local\VMNotify.Preview" : @"Local\VMNotify.Desktop", out bool first);
         if (!first) return;
         var app = new System.Windows.Application();
         var window = new MainWindow(args.Length == 2 && args[0] == "--preview");
