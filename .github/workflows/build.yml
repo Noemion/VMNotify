@@ -90,11 +90,13 @@ jobs:
           rustup default stable
           rustup target add ${{ matrix.target }}
           sudo apt-get update
-          sudo apt-get install -y musl-tools
+          sudo apt-get install -y musl-tools dbus-daemon libglib2.0-bin python3-dbus python3-gi
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
       - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Verify repeated flash cycles on an isolated D-Bus
+        run: /usr/bin/python3 scripts/test-icon-cycles.py target/${{ matrix.target }}/release/vmnotify-agent
       - name: Package agent
         run: |
           mkdir -p artifacts

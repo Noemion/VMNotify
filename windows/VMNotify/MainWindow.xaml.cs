@@ -195,6 +195,12 @@ public partial class MainWindow : Window
     private void RefreshStatus()
     {
         bool connected = receiver.Status.StartsWith("已连接");
+        var status = receiver.Status;
+        bool retrying = status.Contains("后重试") || status.StartsWith("正在");
+        ConnectionLabel.Text = connected ? status.Contains("不可用") ? "已连接 · 监听异常" : "已连接"
+            : retrying ? "连接中" : saved.ScheduleEnabled ? scheduleStatus.Contains("配置有误") ? "定时设置有误" : pausedWindow != null && scheduleStatus.Contains("手动断开") ? "本时段已暂停" : "等待定时连接" : status == "未连接" ? "未连接" : "已断开";
+        ConnectionDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, connected ? "Accent" : "Muted");
+        ConnectionBadge.ToolTip = (saved.Host.Length > 0 ? saved.Host + "\n" : "") + status + (saved.ScheduleEnabled ? "\n" + scheduleStatus : "");
         ScheduleStatusText.Text = scheduleStatus;
         StatusTitle.Text = connected ? "正在接收虚拟机提醒" : receiver.Status.StartsWith("正在") ? "正在连接虚拟机" : "连接你的虚拟机";
         StatusDetail.Text = receiver.Status is "未连接" or "已断开" ? saved.ScheduleEnabled ? scheduleStatus : "开始连接后，你选择的应用会在这台电脑上显示提醒。" : receiver.Status;
@@ -310,6 +316,7 @@ public partial class MainWindow : Window
         RenderApps([new("lanxin", "蓝信", true, "status-notifier-flash", "attention-only")]);
         StatusTitle.Text = "正在接收虚拟机提醒"; StatusDetail.Text = "已连接。应用提醒会自动转发到这台电脑。";
         StatusIcon.Text = "\uE73E"; HostSummary.Text = "192.0.2.10"; AppsSummary.Text = "1 个应用已开启转发"; QuickConnect.Content = "重新连接";
+        ConnectionLabel.Text = "已连接"; ConnectionDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "Accent");
         string[] names = ["overview", "connection", "apps", "about"];
         void Capture(string name) {
             UpdateLayout();

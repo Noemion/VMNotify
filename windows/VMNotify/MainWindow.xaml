@@ -165,6 +165,11 @@
                 <RadioButton x:Name="AppsNav" Style="{StaticResource Nav}" Content="应用管理" Tag="&#xE71D;" GroupName="Navigation" Checked="AppsClicked"/>
             </StackPanel>
             <StackPanel Grid.Row="2" VerticalAlignment="Bottom">
+                <Grid x:Name="ConnectionBadge" Margin="24,8,12,12">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                    <Ellipse x:Name="ConnectionDot" Width="7" Height="7" Fill="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                    <TextBlock x:Name="ConnectionLabel" Grid.Column="1" Text="未连接" FontSize="13" Foreground="{DynamicResource Muted}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                </Grid>
                 <RadioButton x:Name="AboutNav" Style="{StaticResource Nav}" Content="关于" Tag="&#xE946;" GroupName="Navigation" Checked="AboutClicked"/>
             </StackPanel>
         </Grid>

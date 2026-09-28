@@ -1,5 +1,16 @@
 use std::time::{Duration, Instant};
 
+/// NewIcon can be emitted for identical pixels even when flashing has stopped.
+#[derive(Default)]
+pub struct IconChanges(Option<u64>);
+impl IconChanges {
+    pub fn changed(&mut self, fingerprint: u64) -> bool {
+        let changed = self.0.is_some_and(|previous| previous != fingerprint);
+        self.0 = Some(fingerprint);
+        changed
+    }
+}
+
 /// Detect sustained flashing, not individual icon redraws. State is constant-sized.
 #[derive(Default)]
 pub struct Detector {
@@ -52,6 +63,34 @@ impl Detector {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn identical_redraws_clear_and_a_second_flash_notifies() {
+        let start = Instant::now();
+        let mut icon = IconChanges::default();
+        let mut detector = Detector::default();
+        let mut attention = 0;
+        let mut cleared = 0;
+        for i in 0..24 {
+            let now = start + Duration::from_millis(i * 500);
+            // Flash, then keep emitting NewIcon with static pixels, then flash again.
+            let pixels = if (5..15).contains(&i) { 0 } else { i % 2 };
+            if detector.tick(now) {
+                cleared += 1;
+            }
+            if icon.changed(pixels) && detector.pulse(now) {
+                attention += 1;
+            }
+        }
+        assert_eq!(attention, 2);
+        assert_eq!(cleared, 1);
+    }
+    #[test]
+    fn static_icon_signals_never_start_attention() {
+        let mut icon = IconChanges::default();
+        for _ in 0..100 {
+            assert!(!icon.changed(123));
+        }
+    }
     #[test]
     fn sustained_flash_emits_once_and_rearms_after_quiet() {
         let start = Instant::now();

@@ -6,6 +6,7 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    hash::{Hash, Hasher},
     process::Stdio,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -24,6 +25,70 @@ struct Config {
 struct Tracked {
     app: App,
     detector: Box<dyn AttentionDetector>,
+    icon: detector::IconChanges,
+    sample: tokio::sync::mpsc::Sender<()>,
+    _worker: AbortOnDrop,
+}
+
+struct AbortOnDrop(tokio::task::JoinHandle<()>);
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+struct IconSample {
+    owner: String,
+    fingerprint: u64,
+    at: Instant,
+}
+
+fn track(app: App, owner: String, results: tokio::sync::mpsc::Sender<IconSample>) -> Tracked {
+    let (sample, mut requests) = tokio::sync::mpsc::channel(1);
+    let _ = sample.try_send(());
+    let worker = tokio::spawn(async move {
+        let mut failed = false;
+        while requests.recv().await.is_some() {
+            let result = call(
+                &owner,
+                "/StatusNotifierItem",
+                "org.freedesktop.DBus.Properties.Get",
+                &["org.kde.StatusNotifierItem", "IconPixmap"],
+            )
+            .await;
+            match result {
+                Ok(pixels) if pixels.len() <= 1024 * 1024 => {
+                    failed = false;
+                    let mut hash = std::collections::hash_map::DefaultHasher::new();
+                    pixels.hash(&mut hash);
+                    if results
+                        .send(IconSample {
+                            owner: owner.clone(),
+                            fingerprint: hash.finish(),
+                            at: Instant::now(),
+                        })
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+                _ => {
+                    if !failed {
+                        eprintln!("icon sampling unavailable for {owner}");
+                    }
+                    failed = true;
+                }
+            }
+        }
+    });
+    Tracked {
+        detector: app.detector(),
+        app,
+        icon: detector::IconChanges::default(),
+        sample,
+        _worker: AbortOnDrop(worker),
+    }
 }
 
 #[derive(Serialize)]
@@ -271,13 +336,8 @@ async fn monitor(cfg: Config) -> Result<()> {
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
     });
-    struct AbortOnDrop(tokio::task::JoinHandle<()>);
-    impl Drop for AbortOnDrop {
-        fn drop(&mut self) {
-            self.0.abort();
-        }
-    }
     let _discovery = AbortOnDrop(discovery);
+    let (icon_tx, mut icon_rx) = tokio::sync::mpsc::channel::<IconSample>(64);
     let mut tick = interval(Duration::from_millis(250));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut heartbeat = interval(Duration::from_secs(15));
@@ -292,7 +352,14 @@ async fn monitor(cfg: Config) -> Result<()> {
             line = lines.next_line() => {
                 let Some(line) = line? else { bail!("D-Bus monitor exited: {}", child.wait().await?); };
                 if let Some(entry) = pulse_sender(&line).and_then(|s| tracked.get_mut(s)) {
-                    if entry.detector.pulse(Instant::now()) { emit("attention", Some(&entry.app)).await?; }
+                    // Coalesce redraw requests; sampling must not block heartbeats.
+                    let _ = entry.sample.try_send(());
+                }
+            }
+            Some(sample) = icon_rx.recv() => {
+                if let Some(entry) = tracked.get_mut(&sample.owner) {
+                    if entry.detector.tick(sample.at) { emit("cleared", Some(&entry.app)).await?; }
+                    if entry.icon.changed(sample.fingerprint) && entry.detector.pulse(sample.at) { emit("attention", Some(&entry.app)).await?; }
                 }
             }
             changed = discovery_rx.changed() => {
@@ -306,7 +373,7 @@ async fn monitor(cfg: Config) -> Result<()> {
                             if !found.contains_key(owner) { emit("cleared", Some(&entry.app)).await?; }
                         }
                         tracked.retain(|owner, _| found.contains_key(owner));
-                        for (owner, app) in found { tracked.entry(owner).or_insert_with(|| Tracked { detector: app.detector(), app }); }
+                        for (owner, app) in found { tracked.entry(owner.clone()).or_insert_with(|| track(app, owner, icon_tx.clone())); }
                     }
                     Err(err) => {
                         if !discovery_failed { eprintln!("discovery unavailable: {err:#}"); emit("degraded", None).await?; }
