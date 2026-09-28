@@ -26,7 +26,7 @@ if (args.Length == 4 && args[0] == "--ssh-names") {
 if (args.Length == 4 && args[0] is "--ssh" or "--ssh-muted") {
     bool muted = args[0] == "--ssh-muted";
     var receiver = new Receiver();
-    if (muted) receiver.SetEnabledApps([]);
+    receiver.SetEnabledApps(muted ? [] : ["lanxin"]);
     using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(25));
     var running = receiver.Run(new Settings { Host = args[1], User = args[2], AgentPath = args[3] }, stop.Token);
     bool found = false, attention = false;
@@ -52,6 +52,13 @@ if (args.Length == 4 && args[0] is "--ssh" or "--ssh-muted") {
 
 static void Assert(bool condition, string message) { if (!condition) throw new Exception(message); }
 static void Reject(Action action) { try { action(); } catch { return; } throw new Exception("invalid input accepted"); }
+Assert(new Settings().EnabledApps.Length == 0, "new settings must opt out of all apps");
+var defaults = System.Text.Json.JsonSerializer.Deserialize<Settings>("{}");
+Assert(defaults!.EnabledApps.Length == 0, "missing app selection must opt out");
+var selection = new Receiver();
+Assert(!selection.IsEnabled("lanxin"), "receiver must opt out initially");
+selection.SetEnabledApps(["lanxin"]);
+Assert(selection.IsEnabled("lanxin"), "explicit selection must enable forwarding");
 var evt = AgentEvent.Parse("{\"v\":1,\"kind\":\"attention\",\"app_id\":\"lanxin\",\"app_name\":\"蓝信\"}");
 Assert(evt.AppName == "蓝信", "UTF-8 name");
 Reject(() => AgentEvent.Parse("{\"v\":2,\"kind\":\"ready\"}"));

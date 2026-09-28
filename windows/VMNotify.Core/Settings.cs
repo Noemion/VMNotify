@@ -10,7 +10,7 @@ public sealed record Settings
     public string IdentityFile { get; init; } = "";
     public string AgentPath { get; init; } = ".local/bin/vmnotify-agent";
     public bool AutoConnect { get; init; } = true;
-    public string[] EnabledApps { get; init; } = ["lanxin"];
+    public string[] EnabledApps { get; init; } = [];
 
     public void Validate()
     {

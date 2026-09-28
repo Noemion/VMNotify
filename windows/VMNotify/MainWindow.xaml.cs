@@ -35,7 +35,7 @@ public partial class MainWindow : Window
     private readonly string settingsFile;
     private readonly bool previewMode;
     private Settings saved = new();
-    private HashSet<string> enabled = ["lanxin"];
+    private HashSet<string> enabled = [];
     private AvailableApp[]? displayed;
     private CancellationTokenSource? cancellation;
     private Task running = Task.CompletedTask;

@@ -11,7 +11,7 @@ internal sealed class Receiver
         new BoundedChannelOptions(32) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true, SingleWriter = true });
     private string status = "未连接";
     private AvailableApp[] availableApps = [];
-    private string[] enabledApps = ["lanxin"];
+    private string[] enabledApps = [];
     public AvailableApp[] AvailableApps => Volatile.Read(ref availableApps);
     public void SetEnabledApps(string[] ids) => Volatile.Write(ref enabledApps, ids.ToArray());
     public bool IsEnabled(string id) => Volatile.Read(ref enabledApps).Contains(id);

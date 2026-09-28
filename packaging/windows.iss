@@ -113,14 +113,18 @@ begin
 end;
 
 procedure InitializeWizard;
-var IntroductionPage: TWizardPage; IntroductionText: TNewStaticText;
+var IntroductionPage: TWizardPage; IntroductionText: TNewStaticText; IntroductionFrame: TBevel;
 begin
   IntroductionPage := CreateCustomPage(wpWelcome,
     CustomMessage('IntroductionTitle'), CustomMessage('IntroductionDescription'));
+  IntroductionFrame := TBevel.Create(WizardForm);
+  IntroductionFrame.Parent := IntroductionPage.Surface;
+  IntroductionFrame.Shape := bsFrame;
+  IntroductionFrame.SetBounds(0, 0, IntroductionPage.SurfaceWidth, IntroductionPage.SurfaceHeight);
   IntroductionText := TNewStaticText.Create(WizardForm);
   IntroductionText.Parent := IntroductionPage.Surface;
   IntroductionText.AutoSize := False;
-  IntroductionText.SetBounds(0, 0, IntroductionPage.SurfaceWidth, IntroductionPage.SurfaceHeight);
+  IntroductionText.SetBounds(ScaleX(12), ScaleY(16), IntroductionPage.SurfaceWidth - ScaleX(24), IntroductionPage.SurfaceHeight - ScaleY(28));
   IntroductionText.WordWrap := True;
   IntroductionText.Caption := CustomMessage('AppIntroduction');
   WizardForm.ReadyMemo.Color := clWhite;
