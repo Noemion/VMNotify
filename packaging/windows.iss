@@ -38,7 +38,8 @@ RestartApplications=no
 #include "legacy-runtime-cleanup.iss"
 
 [Files]
-Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "portable.marker"
+; Do not change installer identity merely because an unchanged input was recopied.
+Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs notimestamp; Excludes: "portable.marker"
 
 [Icons]
 Name: "{group}\VMNotify"; Filename: "{app}\VMNotify.exe"
