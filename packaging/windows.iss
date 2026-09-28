@@ -54,6 +54,34 @@ english.WelcomeLabel2=Receive message alerts from supported apps in your Linux v
 chinesesimplified.WelcomeLabel2=将 Linux 虚拟机中受支持应用的消息提醒转发到 Windows，无需切换窗口。%n%n通过 SSH 连接虚拟机，自动发现应用，自主选择要转发的通知。%n%n自动保存设置，支持托盘后台运行、断线重连和定时连接。%n%n使用前需安装 Linux 采集端；Windows 端需要 .NET Desktop Runtime 10.0 和 OpenSSH 客户端。%n%n接下来选择安装路径和开始菜单名称，再确认安装。
 
 [CustomMessages]
+english.ActionInstall=Install
+chinesesimplified.ActionInstall=安装
+english.ActionUpgrade=Upgrade
+chinesesimplified.ActionUpgrade=升级
+english.ActionReinstall=Reinstall
+chinesesimplified.ActionReinstall=重装
+english.ActionDowngrade=Downgrade
+chinesesimplified.ActionDowngrade=降级
+english.ActionUnknown=Replace
+chinesesimplified.ActionUnknown=覆盖安装
+english.ReadyDescription=Review the detected installation state and destination before continuing.
+chinesesimplified.ReadyDescription=请核对检测到的安装状态和目标位置。
+english.ReadyInstructions=Click %1 to continue, or Back to change settings.
+chinesesimplified.ReadyInstructions=点击“%1”继续，或点击“上一步”修改设置。
+english.ReadyAction=Ready to %1 VMNotify
+chinesesimplified.ReadyAction=准备%1 VMNotify
+english.ActionSummary=Operation: %1%nInstalled version: %2%nTarget version: %3
+chinesesimplified.ActionSummary=操作类型：%1%n当前版本：%2%n目标版本：%3
+english.NotInstalled=Not installed
+chinesesimplified.NotInstalled=未安装
+english.UnknownVersion=Unknown
+chinesesimplified.UnknownVersion=未知
+english.PreviousFolder=Current installation folder:
+chinesesimplified.PreviousFolder=当前安装位置：
+english.RetainSettings=Saved connection settings and app selections will be retained.
+chinesesimplified.RetainSettings=已保存的连接配置和应用选择将予以保留。
+english.DowngradeNote=This will replace the installed version with an older version.
+chinesesimplified.DowngradeNote=本次将使用较旧版本替换当前版本。
 english.MoveFailed=The previous installation could not be removed. Close VMNotify and try again. Your saved connection settings are retained.
 chinesesimplified.MoveFailed=无法移除旧版安装。请退出 VMNotify 后重试。已保存的连接配置会保留。
 english.UninstallApp=Uninstall VMNotify
@@ -78,6 +106,80 @@ Filename: "{app}\VMNotify.exe"; Description: "{cm:LaunchApp}"; Flags: nowait pos
 
 [Code]
 var RestoreStartupAfterMove: Boolean;
+
+const UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\VMNotify_is1';
+var ReadyAction, InstalledVersion, InstalledFolder: String;
+
+procedure DetectInstallAction;
+var RootKey: Integer; Existing: Boolean; OldVersion, NewVersion: Int64;
+begin
+  RootKey := HKCU32;
+  if IsWin64 then
+    if RegKeyExists(HKCU64, UninstallKey) then RootKey := HKCU64;
+  Existing := RegKeyExists(RootKey, UninstallKey);
+  InstalledVersion := '';
+  InstalledFolder := '';
+  if Existing then begin
+    RegQueryStringValue(RootKey, UninstallKey, 'InstallLocation', InstalledFolder);
+    RegQueryStringValue(RootKey, UninstallKey, 'DisplayVersion', InstalledVersion);
+  end;
+  { Also recognize files remaining in the selected folder without registration. }
+  if not Existing then begin
+    InstalledFolder := ExpandConstant('{app}');
+    Existing := FileExists(AddBackslash(InstalledFolder) + 'VMNotify.exe');
+  end;
+  if not Existing then begin
+    ReadyAction := 'ActionInstall';
+    InstalledFolder := '';
+    InstalledVersion := CustomMessage('NotInstalled');
+    Exit;
+  end;
+  if (InstalledVersion = '') or not StrToVersion(InstalledVersion, OldVersion) then begin
+    if InstalledFolder = '' then InstalledVersion := ''
+    else if not GetVersionNumbersString(AddBackslash(InstalledFolder) + 'VMNotify.exe', InstalledVersion) then
+      InstalledVersion := '';
+  end;
+  if (InstalledVersion = '') or not StrToVersion(InstalledVersion, OldVersion) then begin
+    ReadyAction := 'ActionUnknown';
+    InstalledVersion := CustomMessage('UnknownVersion');
+    Exit;
+  end;
+  if not StrToVersion('{#AppVersion}', NewVersion) then
+    RaiseException('Invalid installer version');
+  case ComparePackedVersion(NewVersion, OldVersion) of
+    -1: ReadyAction := 'ActionDowngrade';
+     0: ReadyAction := 'ActionReinstall';
+     1: ReadyAction := 'ActionUpgrade';
+  end;
+end;
+
+function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo,
+  MemoTypeInfo, MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
+begin
+  DetectInstallAction;
+  Result := FmtMessage(CustomMessage('ActionSummary'), [CustomMessage(ReadyAction), InstalledVersion, '{#AppVersion}']);
+  if InstalledFolder <> '' then
+    Result := Result + NewLine + NewLine + CustomMessage('PreviousFolder') +
+      NewLine + Space + InstalledFolder;
+  Result := Result + NewLine + NewLine + MemoDirInfo;
+  if MemoGroupInfo <> '' then Result := Result + NewLine + NewLine + MemoGroupInfo;
+  if MemoTasksInfo <> '' then Result := Result + NewLine + NewLine + MemoTasksInfo;
+  if ReadyAction <> 'ActionInstall' then
+    Result := Result + NewLine + NewLine + CustomMessage('RetainSettings');
+  if ReadyAction = 'ActionDowngrade' then
+    Result := Result + NewLine + CustomMessage('DowngradeNote');
+  Log('Installation action: ' + ReadyAction + '; installed=' + InstalledVersion + '; target={#AppVersion}');
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID = wpReady then begin
+    WizardForm.PageNameLabel.Caption := FmtMessage(CustomMessage('ReadyAction'), [CustomMessage(ReadyAction)]);
+    WizardForm.NextButton.Caption := CustomMessage(ReadyAction);
+    WizardForm.PageDescriptionLabel.Caption := CustomMessage('ReadyDescription');
+    WizardForm.ReadyLabel.Caption := FmtMessage(CustomMessage('ReadyInstructions'), [CustomMessage(ReadyAction)]);
+  end;
+end;
 
 procedure StopInstalledApp;
 var Locator, Services, Processes, Process: Variant; I, Attempt: Integer;

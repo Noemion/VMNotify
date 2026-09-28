@@ -153,16 +153,19 @@ public partial class MainWindow : Window
         ConnectionPage.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
         AppsPage.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
         AboutPage.Visibility = index == 3 ? Visibility.Visible : Visibility.Collapsed;
+        SettingsPage.Visibility = index == 4 ? Visibility.Visible : Visibility.Collapsed;
+        SettingsFooter.Visibility = index == 4 ? Visibility.Visible : Visibility.Collapsed;
         ConnectionFooter.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
-        PageTitle.Text = new[] { "概览", "连接设置", "应用管理", "关于" }[index];
-        PageDescription.Text = new[] { "管理虚拟机连接与应用通知。", "设置与 Linux 虚拟机的连接方式。", "选择哪些应用可以在这台电脑上提醒你。", "版本与更新" }[index];
+        PageTitle.Text = new[] { "概览", "虚拟机配置", "应用管理", "关于", "设置" }[index];
+        PageDescription.Text = new[] { "管理虚拟机连接与应用通知。", "设置与 Linux 虚拟机的连接方式。", "选择哪些应用可以在这台电脑上提醒你。", "版本与更新", "管理启动行为与定时连接。" }[index];
         if (index == 0) OverviewNav.IsChecked = true;
         else if (index == 1) ConnectionNav.IsChecked = true;
         else if (index == 2) AppsNav.IsChecked = true;
-        else AboutNav.IsChecked = true;
+        else if (index == 3) AboutNav.IsChecked = true; else SettingsNav.IsChecked = true;
     }
     private void OverviewClicked(object sender, RoutedEventArgs e) => SelectPage(0);
     private void ConnectionClicked(object sender, RoutedEventArgs e) => SelectPage(1);
+    private void SettingsClicked(object sender, RoutedEventArgs e) => SelectPage(4);
     private void AppsClicked(object sender, RoutedEventArgs e) => SelectPage(2);
     private void ShowNotification(string title, string text)
     {
@@ -231,13 +234,10 @@ public partial class MainWindow : Window
         busy = true; SaveConnect.IsEnabled = QuickConnect.IsEnabled = false;
         try {
             if (!int.TryParse(PortInput.Text, out var port)) throw new ArgumentException("SSH 端口必须是数字");
-            var cfg = new Settings { Host = HostInput.Text.Trim(), User = UserInput.Text.Trim(), Port = port,
-                IdentityFile = IdentityInput.Text.Trim(), AgentPath = AgentInput.Text.Trim(), AutoConnect = AutoConnectInput.IsChecked == true, EnabledApps = enabled.ToArray(),
-                ScheduleEnabled = ScheduleInput.IsChecked == true, ConnectTime = ConnectTimeInput.Text.Trim(), DisconnectTime = DisconnectTimeInput.Text.Trim() };
+            var cfg = saved with { Host = HostInput.Text.Trim(), User = UserInput.Text.Trim(), Port = port,
+                IdentityFile = IdentityInput.Text.Trim(), AgentPath = AgentInput.Text.Trim(), EnabledApps = enabled.ToArray() }; // General options are saved independently.
+
             cfg.Validate(); Receiver.SshPath(); saved = cfg; SaveSettings();
-            using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run")) {
-                if (StartupInput.IsChecked == true) key.SetValue("VMNotify", StartupCommand()); else key.DeleteValue("VMNotify", false);
-            }
             await Stop(); if (quitting) return;
             pausedWindow = null; scheduleRetryAfter = DateTime.MinValue;
             if (!cfg.ScheduleEnabled) scheduleStatus = "";
@@ -249,9 +249,36 @@ public partial class MainWindow : Window
         finally { busy = false; SaveConnect.IsEnabled = QuickConnect.IsEnabled = true; RefreshStatus(); }
     }
 
+    private async void SaveGeneralClicked(object sender, RoutedEventArgs e)
+    {
+        if (busy || previewMode) return;
+        busy = true; SaveGeneral.IsEnabled = false;
+        try {
+            var cfg = saved with { AutoConnect = AutoConnectInput.IsChecked == true,
+                ScheduleEnabled = ScheduleInput.IsChecked == true,
+                ConnectTime = ConnectTimeInput.Text.Trim(), DisconnectTime = DisconnectTimeInput.Text.Trim() };
+            if (cfg.ScheduleEnabled) _ = DailySchedule.Parse(cfg.ConnectTime, cfg.DisconnectTime);
+            var previous = saved;
+            saved = cfg;
+            try { SaveSettings(); } catch { saved = previous; throw; }
+            using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run")) {
+                if (StartupInput.IsChecked == true) key.SetValue("VMNotify", StartupCommand()); else key.DeleteValue("VMNotify", false);
+            }
+            if (previous.ScheduleEnabled != cfg.ScheduleEnabled || previous.ConnectTime != cfg.ConnectTime || previous.DisconnectTime != cfg.DisconnectTime) {
+                pausedWindow = null; scheduleRetryAfter = DateTime.MinValue;
+            }
+            if (!cfg.ScheduleEnabled) scheduleStatus = "";
+            SettingsSaveStatus.Text = "设置已保存。";
+        } catch (Exception ex) { WpfMessageBox.Show(this, ex.Message, "VMNotify", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        finally { busy = false; SaveGeneral.IsEnabled = true; }
+        if (saved.Host.Length > 0) await EvaluateSchedule();
+        RefreshStatus();
+    }
+
     private async Task EvaluateSchedule()
     {
         if (!loaded || previewMode || busy || quitting || !saved.ScheduleEnabled) return;
+        if (saved.Host.Length == 0) { scheduleStatus = "请先配置虚拟机连接。"; return; }
         busy = true;
         try {
             var now = DateTime.Now;
@@ -325,7 +352,7 @@ public partial class MainWindow : Window
         StatusTitle.Text = "正在接收虚拟机提醒"; StatusDetail.Text = "已连接。应用提醒会自动转发到这台电脑。";
         StatusIcon.Text = "\uE73E"; HostSummary.Text = "192.0.2.10"; AppsSummary.Text = "1 个应用已开启转发"; QuickConnect.Content = "重新连接";
         ConnectionLabel.Text = "已连接"; ConnectionDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "Accent");
-        string[] names = ["overview", "connection", "apps", "about"];
+        string[] names = ["overview", "connection", "apps", "about", "settings"];
         void Capture(string name) {
             UpdateLayout();
             var bitmap = new RenderTargetBitmap((int)Root.ActualWidth, (int)Root.ActualHeight, 96, 96, PixelFormats.Pbgra32);
@@ -342,7 +369,7 @@ public partial class MainWindow : Window
             for (int i = 0; i < names.Length; i++) {
                 SelectPage(i); UpdateLayout(); await Task.Delay(150); HideScrollbarImmediately();
                 Capture(names[i] + (light ? "-light" : "-dark"));
-                if (i == 1) {
+                if (i == 4) {
                     ScheduleInput.IsChecked = true;
                     PageScroll.ScrollToEnd(); UpdateLayout(); await Task.Delay(150); HideScrollbarImmediately();
                     Capture("schedule" + (light ? "-light" : "-dark"));
@@ -350,7 +377,7 @@ public partial class MainWindow : Window
                 }
             }
         }
-        SystemTheme.Apply(this, false); Height = 620; SelectPage(1); UpdateLayout();
+        SystemTheme.Apply(this, false); Height = 620; PageScroll.Height = 240; SelectPage(1); UpdateLayout();
         await Task.Delay(200); HideScrollbarImmediately();
         if (PageScroll.ScrollableHeight <= 0) throw new InvalidOperationException("Scroll test needs overflowing content");
         double width = ConnectionPage.ActualWidth;
