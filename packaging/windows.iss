@@ -42,13 +42,9 @@ UsePreviousLanguage=no
 Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
-[Messages]
-english.ReadyLabel2a=VMNotify forwards message alerts from supported apps in your Linux virtual machine to Windows, so you can stay informed without switching windows.%n%nClick Install to continue, or Back to review your settings.
-english.ReadyLabel2b=VMNotify forwards message alerts from supported apps in your Linux virtual machine to Windows, so you can stay informed without switching windows.%n%nClick Install to continue.
-chinesesimplified.ReadyLabel2a=VMNotify 将 Linux 虚拟机中受支持应用的消息提醒转发到 Windows，无需切换窗口即可获知新消息。%n%n点击“安装”继续，或点击“上一步”检查设置。
-chinesesimplified.ReadyLabel2b=VMNotify 将 Linux 虚拟机中受支持应用的消息提醒转发到 Windows，无需切换窗口即可获知新消息。%n%n点击“安装”继续。
-
 [CustomMessages]
+english.AppIntroduction=YOUR VIRTUAL MACHINE'S ALERTS, ON WINDOWS%n%nVMNotify forwards message alerts from supported Linux applications to your Windows desktop, so you can stay informed without switching windows.%n%nFEATURES%n  - Discover supported apps in the connected virtual machine.%n  - Choose which apps can notify you; changes are saved automatically.%n  - Reconnect automatically and keep receiving alerts in the system tray.%n  - Follow the Windows light or dark theme.%n%nGET STARTED%nInstall the companion agent in your Linux virtual machine, configure an SSH connection, then select the apps you want to receive alerts from.%n%nCURRENT SUPPORT%nThe built-in adapter supports Lanxin attention alerts. It does not read chat messages or report unread counts. Additional applications require adapters.%n%nREQUIREMENTS%n.NET Desktop Runtime 10.0 for this package's architecture and the Windows OpenSSH client.
+chinesesimplified.AppIntroduction=虚拟机里的消息，Windows 上及时获知%n%nVMNotify 将 Linux 虚拟机中受支持应用的消息提醒转发到 Windows 桌面，无需频繁切换窗口。%n%n主要功能%n  · 自动发现已连接虚拟机中受支持的应用。%n  · 按应用选择是否接收提醒，修改后自动保存。%n  · 支持断线重连，关闭窗口后继续在系统托盘中运行。%n  · 跟随 Windows 的浅色或深色主题。%n%n开始使用%n在 Linux 虚拟机中安装配套采集端，配置 SSH 连接，再选择需要接收提醒的应用。%n%n当前支持%n内置蓝信适配器，转发“有消息待查看”的提醒，不读取聊天正文或统计未读数量；其他应用需要相应适配器。%n%n运行环境%n需要与安装包架构对应的 .NET Desktop Runtime 10.0，以及 Windows OpenSSH 客户端。
 english.UninstallApp=Uninstall VMNotify
 chinesesimplified.UninstallApp=卸载 VMNotify
 english.LaunchApp=Launch VMNotify
@@ -70,6 +66,18 @@ Name: "{group}\{cm:UninstallApp}"; Filename: "{uninstallexe}"
 Filename: "{app}\VMNotify.exe"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo,
+  MemoTypeInfo, MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
+begin
+  Result := CustomMessage('AppIntroduction');
+  if MemoUserInfoInfo <> '' then Result := Result + NewLine + NewLine + MemoUserInfoInfo;
+  if MemoDirInfo <> '' then Result := Result + NewLine + NewLine + MemoDirInfo;
+  if MemoTypeInfo <> '' then Result := Result + NewLine + NewLine + MemoTypeInfo;
+  if MemoComponentsInfo <> '' then Result := Result + NewLine + NewLine + MemoComponentsInfo;
+  if MemoGroupInfo <> '' then Result := Result + NewLine + NewLine + MemoGroupInfo;
+  if MemoTasksInfo <> '' then Result := Result + NewLine + NewLine + MemoTasksInfo;
+end;
+
 function HasFramework(const Root, Framework, RequiredFile: String): Boolean;
 var Entry: TFindRec; Base, Patch: String;
 begin
