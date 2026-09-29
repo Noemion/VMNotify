@@ -132,7 +132,7 @@ public sealed class Updates(HttpClient client, string directory)
         string path = LocalPath(item.FileName);
         await using var stream = File.OpenRead(path);
         if (stream.Length != item.Size || !Convert.ToHexString(await SHA256.HashDataAsync(stream, token)).Equals(item.Sha256, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("安装包校验失败，请删除后重新下载。");
+            throw new InvalidDataException("安装包校验失败，请重试“下载并升级”。");
         return path;
     }
 

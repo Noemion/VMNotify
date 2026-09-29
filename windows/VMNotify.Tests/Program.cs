@@ -1,5 +1,61 @@
 using VMNotify;
 
+if (args.Length == 5 && args[0] == "--ssh-sampling") {
+    var liveSettings = new Settings { Host = args[1], User = args[2], AgentPath = args[3], Rules = new() {
+        [args[4]] = new NotificationRule { Condition = RuleCondition.Grayscale, SampleMilliseconds = 1000, HoldSeconds = 2, RepeatSeconds = 60 }
+    } };
+    var start = new System.Diagnostics.ProcessStartInfo(Receiver.SshPath()) { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
+    foreach (var argument in liveSettings.SshArguments()) start.ArgumentList.Add(argument);
+    using var process = System.Diagnostics.Process.Start(start)!;
+    using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+    var times = new List<long>();
+    try {
+        await foreach (var line in Protocol.Lines(process.StandardOutput, deadline.Token)) {
+            var sample = AgentEvent.Parse(line);
+            if (sample.AppId != args[4] || sample.Icon == null) continue;
+            using var data = System.Text.Json.JsonDocument.Parse(line);
+            times.Add(data.RootElement.GetProperty("timestamp_ms").GetInt64());
+            if (times.Count == 8) break;
+        }
+        var gaps = times.Zip(times.Skip(1), (a, b) => b - a).ToArray();
+        if (times.Count != 8 || gaps.Average() < 750 || gaps.Average() > 1500 || gaps.Any(g => g < 650 || g > 1800))
+            throw new Exception("Unexpected live sampling cadence: " + string.Join(", ", gaps));
+        Console.WriteLine("PASS: actual SSH per-app 1000ms sampling; observed intervals (ms): " + string.Join(", ", gaps));
+    } finally { if (!process.HasExited) process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); }
+    return;
+}
+
+if (args.Length == 2 && args[0] == "--replay-icons") {
+    var clock = new TimingTests.Clock();
+    var receiver = new Receiver(clock);
+    long? previous = null;
+    var samples = new List<(long Time, AgentEvent Event)>();
+    foreach (var line in File.ReadLines(args[1])) {
+        var ev = AgentEvent.Parse(line);
+        using var document = System.Text.Json.JsonDocument.Parse(line);
+        if (ev.Icon != null) samples.Add((document.RootElement.GetProperty("timestamp_ms").GetInt64(), ev));
+    }
+    var id = samples.First().Event.AppId!;
+    receiver.SetEnabledApps([id]);
+    receiver.SetRules(new() { [id] = new NotificationRule { Condition = RuleCondition.Grayscale, SampleMilliseconds = 1000, HoldSeconds = 2, RepeatSeconds = 60, Message = "aTrust 未连接" } });
+    int notifications = 0; AgentEvent? notification = null;
+    foreach (var (time, ev) in samples) {
+        if (previous != null) clock.Advance(TimeSpan.FromMilliseconds(time - previous.Value));
+        previous = time;
+        receiver.ApplyObservation(ev); receiver.QueueReminders();
+        while (receiver.Notifications.Reader.TryRead(out var replayAlert)) {
+            if (!receiver.ShouldDisplay(replayAlert)) continue;
+            notifications++; notification = replayAlert;
+            Console.WriteLine($"NOTIFICATION at {time}: {replayAlert.Message}");
+        }
+    }
+    if (!samples.Any(s => s.Event.Icon!.Colorful == true) || !samples.Any(s => s.Event.Icon!.Colorful == false)) throw new Exception("Need real color and gray samples");
+    if (notifications != 1) throw new Exception($"Expected exactly one notification, got {notifications}");
+    if (samples.Last().Event.Icon!.Colorful != true || receiver.ShouldDisplay(notification!)) throw new Exception("Need recovery to color and cleared notification");
+    Console.WriteLine($"PASS: {samples.Count} real icon samples; grayscale hold triggers once and color recovery clears host notification.");
+    return;
+}
+
 if (args.Length == 4 && args[0] == "--ssh-authorization") {
     await SshAuthorizationTests.Integration(args[1], args[2], int.Parse(args[3]));
     return;
@@ -110,5 +166,6 @@ foreach (var input in new[] { new string('x', 32769), "truncated" }) {
 Console.WriteLine("All protocol, framing and SSH argument tests passed.");
 await UpdateTests.Run();
 TimingTests.Run();
+RuleTests.Run();
 CalendarTests.Run();
 SshAuthorizationTests.Run();

@@ -269,7 +269,7 @@
                     </StackPanel>
 
                     <StackPanel x:Name="AppsPage" Visibility="Collapsed">
-                        <TextBlock Text="应用持续需要关注时，每 3 分钟重复提醒；状态解除后停止提醒。" Style="{StaticResource Secondary}" Margin="0,0,0,12"/>
+                        <TextBlock Text="为每个应用选择通知条件：闪烁、颜色、图标状态或图标名称；状态解除后停止提醒。" Style="{StaticResource Secondary}" Margin="0,0,0,12"/>
                         <Border Style="{StaticResource Card}" Background="{DynamicResource InfoBackground}" Margin="0,0,0,18">
                             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="30"/><ColumnDefinition/></Grid.ColumnDefinitions>
                                 <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" Foreground="{DynamicResource Accent}" FontSize="17" VerticalAlignment="Center"/>
@@ -284,8 +284,11 @@
                             <Border Style="{StaticResource Card}" Padding="20,21"><Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <Border Width="34" Height="34" CornerRadius="7" Background="{DynamicResource InfoBackground}" HorizontalAlignment="Left"><TextBlock Text="&#xE8F2;" FontFamily="Segoe MDL2 Assets" Foreground="{DynamicResource Accent}" FontSize="19" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-                                <StackPanel Grid.Column="1"><TextBlock Text="{Binding Name}" FontWeight="SemiBold"/><TextBlock Text="{Binding Detail}" Style="{StaticResource Secondary}"/></StackPanel>
-                                <CheckBox Grid.Column="2" Style="{StaticResource Switch}" IsChecked="{Binding Enabled, Mode=TwoWay}" Click="AppToggleClicked" AutomationProperties.Name="{Binding Name}"/>
+                                <StackPanel Grid.Column="1" Margin="0,0,12,0"><TextBlock Text="{Binding Name}" FontWeight="SemiBold"/><TextBlock Text="{Binding Detail}" Style="{StaticResource Secondary}"/><TextBlock Text="{Binding RuleSummary}" Style="{StaticResource Secondary}"/></StackPanel>
+                                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                    <CheckBox Style="{StaticResource Switch}" HorizontalAlignment="Right" IsChecked="{Binding Enabled, Mode=TwoWay}" Click="AppToggleClicked" AutomationProperties.Name="{Binding Name}"/>
+                                    <Button Content="通知规则" Click="RuleClicked" Margin="0,10,0,0"/>
+                                </StackPanel>
                             </Grid></Border>
                         </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
                     </StackPanel>
@@ -302,27 +305,11 @@
                             <TextBlock x:Name="UpdateStatus" Text="点击检查更新，获取 GitHub 上的最新正式版本。" Style="{StaticResource Secondary}" Margin="0,6,0,12"/>
                             <WrapPanel>
                                 <Button x:Name="CheckUpdateButton" Content="检查更新" Click="CheckUpdateClicked" Margin="0,0,8,0"/>
-                                <Button x:Name="DownloadUpdateButton" Content="下载更新" Click="DownloadUpdateClicked" IsEnabled="False"/>
+                                <Button x:Name="DownloadUpdateButton" Content="下载并升级" Click="DownloadUpdateClicked" IsEnabled="False"/>
                             </WrapPanel>
                             <ProgressBar x:Name="UpdateProgress" Height="4" Margin="0,12,0,0" Minimum="0" Maximum="100" Visibility="Collapsed"/>
                         </StackPanel></Border>
-                        <Grid Margin="0,16,17,8">
-                            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="已下载的安装包" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                            <Button x:Name="ClearDownloadsButton" Grid.Column="1" Content="全部删除" Click="ClearDownloadsClicked"/>
-                        </Grid>
-                        <TextBlock x:Name="NoDownloads" Text="暂无已下载的安装包。" Style="{StaticResource Secondary}"/>
-                        <ItemsControl x:Name="DownloadedPackages"><ItemsControl.ItemTemplate><DataTemplate>
-                            <Border Style="{StaticResource Card}"><Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <StackPanel VerticalAlignment="Center" Margin="0,0,12,0"><TextBlock Text="{Binding Version, StringFormat=版本 {0}}"/><TextBlock Text="{Binding FileName}" Style="{StaticResource Secondary}"/></StackPanel>
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Button Content="安装" Click="InstallUpdateClicked" Margin="0,0,8,0"/>
-                                    <Button x:Name="PackageDeleteButton" Content="删除" Click="DeleteUpdateClicked"/>
-                                </StackPanel>
-                            </Grid></Border>
-                        </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-                        <TextBlock Text="安装将打开更新向导并退出当前程序；删除仅清理下载文件，保留已安装的程序和配置。" Style="{StaticResource Secondary}" Margin="0,10,0,0"/>
+                        <TextBlock Text="下载校验完成后自动打开升级向导并退出当前程序。下次启动时自动清理之前下载的安装包。" Style="{StaticResource Secondary}" Margin="0,10,0,0"/>
                     </StackPanel>
                 </Grid>
             </ScrollViewer>

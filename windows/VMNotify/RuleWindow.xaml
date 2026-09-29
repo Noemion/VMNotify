@@ -1,0 +1,101 @@
+<Window x:Class="VMNotify.RuleWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="通知规则" Width="660" Height="790" MinWidth="560" MinHeight="480"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{DynamicResource WindowBackground}" Foreground="{DynamicResource MainText}"
+        FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="14">
+    <Window.Resources>
+        <Style TargetType="ComboBox">
+            <Setter Property="Foreground" Value="{DynamicResource MainText}"/>
+            <Setter Property="Background" Value="{DynamicResource InputBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource InputBorder}"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox">
+                <Grid>
+                    <ToggleButton Focusable="False" IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                        <ToggleButton.Template><ControlTemplate TargetType="ToggleButton">
+                            <Border Background="{DynamicResource InputBackground}" BorderBrush="{DynamicResource InputBorder}" BorderThickness="1" CornerRadius="4">
+                                <TextBlock Text="⌄" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="{DynamicResource MainText}"/>
+                            </Border>
+                        </ControlTemplate></ToggleButton.Template>
+                    </ToggleButton>
+                    <ContentPresenter Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" Margin="10,6,32,6" VerticalAlignment="Center" IsHitTestVisible="False"/>
+                    <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False">
+                        <Border Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource InputBorder}" BorderThickness="1" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
+                            <ScrollViewer MaxHeight="300"><ItemsPresenter/></ScrollViewer>
+                        </Border>
+                    </Popup>
+                </Grid>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="{DynamicResource MainText}"/><Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBoxItem">
+                <Border x:Name="Item" Background="Transparent" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border>
+                <ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Item" Property="Background" Value="{DynamicResource NavSelected}"/></Trigger></ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+    </Window.Resources>
+    <Border Background="{DynamicResource WindowBackground}" Padding="24"><Grid>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <StackPanel Margin="0,0,0,16">
+            <TextBlock x:Name="AppTitle" FontSize="23" FontWeight="SemiBold"/>
+            <TextBlock Text="选择这个应用在什么情况下通知你。保存后即时生效。" Style="{DynamicResource Secondary}"/>
+        </StackPanel>
+        <ScrollViewer x:Name="RuleScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ScrollViewer.Template><ControlTemplate TargetType="ScrollViewer">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/></Grid.ColumnDefinitions>
+                    <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" ClipToBounds="True" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" CanContentScroll="{TemplateBinding CanContentScroll}"/>
+                    <ScrollBar x:Name="PART_VerticalScrollBar" Grid.Column="1" Style="{DynamicResource OverlayBar}" Orientation="Vertical"
+                        Minimum="0" Maximum="{TemplateBinding ScrollableHeight}" ViewportSize="{TemplateBinding ViewportHeight}"
+                        Value="{Binding VerticalOffset, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}"
+                        Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+                </Grid>
+            </ControlTemplate></ScrollViewer.Template>
+            <StackPanel Margin="0,0,12,0">
+                <Border Style="{DynamicResource Card}"><StackPanel>
+                    <TextBlock Text="当前托盘状态" FontWeight="SemiBold"/>
+                    <ComboBox x:Name="InstanceInput" DisplayMemberPath="Label" SelectedValuePath="Id" Margin="0,8,0,6" MinHeight="30" SelectionChanged="InstanceChanged"/>
+                    <TextBlock x:Name="LiveStatus" Style="{DynamicResource Secondary}"/>
+                    <TextBox x:Name="LiveName" IsReadOnly="True" Margin="0,8,0,0" AutomationProperties.Name="当前图标名称"/>
+                    <TextBlock Text="图标名称（可选中复制）；不同颜色可能使用相同名称。" Style="{DynamicResource Secondary}"/>
+                    <WrapPanel x:Name="ColorSwatches" Margin="0,8,0,0"/>
+                </StackPanel></Border>
+                <TextBlock Text="通知条件" Margin="0,10,0,6"/>
+                <ComboBox x:Name="ConditionInput" MinHeight="34" SelectionChanged="ConditionChanged"/>
+                <StackPanel x:Name="TargetPanel" Margin="0,12,0,0">
+                    <TextBlock x:Name="TargetLabel" Text="目标"/>
+                    <TextBox x:Name="TargetInput" Margin="0,6,0,6" MaxLength="1024"/>
+                    <WrapPanel>
+                        <Button x:Name="RecordButton" Content="使用当前状态" Click="RecordClicked" Margin="0,0,8,0"/>
+                        <Button x:Name="PickColorButton" Content="选择颜色…" Click="PickColorClicked"/>
+                    </WrapPanel>
+                </StackPanel>
+                <StackPanel x:Name="TolerancePanel" Margin="0,12,0,0">
+                    <TextBlock Text="颜色容差（0–255，越小越严格）"/>
+                    <TextBox x:Name="ToleranceInput" Margin="0,6,0,0"/>
+                </StackPanel>
+                <TextBlock x:Name="ConditionHelp" Style="{DynamicResource Secondary}" Margin="0,8,0,0"/>
+                <TextBlock Text="检测间隔（秒，0.25–60，按 0.25 递增）" Margin="0,16,0,6"/>
+                <TextBox x:Name="SampleInput"/>
+                <TextBlock Text="每个应用独立设置。闪烁检测使用 0.25 或 0.5 秒；颜色、名称等状态可使用更长间隔。修改检测间隔会自动重新连接虚拟机。" Style="{DynamicResource Secondary}" Margin="0,6,0,0"/>
+                <Grid Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                    <StackPanel><TextBlock Text="持续时间（秒）"/><TextBox x:Name="HoldInput" Margin="0,6,0,0"/></StackPanel>
+                    <StackPanel Grid.Column="2"><TextBlock Text="重复间隔（秒，0 为仅一次）"/><TextBox x:Name="RepeatInput" Margin="0,6,0,0"/></StackPanel>
+                </Grid>
+                <TextBlock Text="持续时间用于过滤短暂变化；重复间隔仅控制这个应用再次提醒的频率，0 表示仅提醒一次。" Style="{DynamicResource Secondary}" Margin="0,6,0,0"/>
+                <CheckBox x:Name="InitialInput" Foreground="{DynamicResource MainText}" Content="开始监测时已符合条件，也通知我" Margin="0,16,0,0"/>
+                <TextBlock Text="通知内容（留空则使用条件说明）" Margin="0,16,0,6"/>
+                <TextBox x:Name="MessageInput" MaxLength="200"/>
+                <TextBlock x:Name="ValidationMessage" Foreground="{DynamicResource Accent}" TextWrapping="Wrap" Margin="0,12,0,0"/>
+            </StackPanel>
+        </ScrollViewer>
+        <Grid Grid.Row="2" Margin="0,18,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Button Content="恢复默认" HorizontalAlignment="Left" Click="ResetClicked"/>
+            <Button Grid.Column="1" Content="取消" IsCancel="True" Margin="0,0,10,0"/>
+            <Button Grid.Column="2" Content="保存规则" Style="{DynamicResource Primary}" Click="SaveClicked"/>
+        </Grid>
+    </Grid></Border>
+</Window>

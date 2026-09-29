@@ -120,6 +120,8 @@ jobs:
         run: |
           /usr/bin/python3 scripts/test-auto-discovery.py target/${{ matrix.target }}/release/vmnotify-agent
           /usr/bin/python3 scripts/test-auto-discovery.py target/${{ matrix.target }}/release/vmnotify-agent --icon-name
+      - name: Verify independent application sampling intervals
+        run: /usr/bin/python3 scripts/test-sampling-intervals.py target/${{ matrix.target }}/release/vmnotify-agent
       - name: Package agent
         run: |
           mkdir -p artifacts

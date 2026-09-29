@@ -11,7 +11,7 @@ public record AvailableApp(string Id, string Name, bool Running, string Adapter,
     public override string ToString() => $"{Name} — {(Running ? "正在监听" : "已安装，未运行")}（仅提醒）";
 }
 
-public record AgentEvent(string Kind, string? AppId, string? AppName, AvailableApp[]? Apps = null)
+public record AgentEvent(string Kind, string? AppId, string? AppName, AvailableApp[]? Apps = null, IconObservation? Icon = null, string? Message = null)
 {
     public static AgentEvent Parse(string line)
     {
@@ -23,7 +23,8 @@ public record AgentEvent(string Kind, string? AppId, string? AppName, AvailableA
         if (kind is not ("ready" or "heartbeat" or "attention" or "cleared" or "degraded" or "apps"))
             throw new InvalidDataException("未知事件类型");
         string? id = null, name = null;
-        if (kind is "attention" or "cleared")
+        bool hasIcon = kind == "heartbeat" && root.TryGetProperty("icon", out _);
+        if (kind is "attention" or "cleared" || hasIcon)
         {
             id = root.GetProperty("app_id").GetString();
             name = root.GetProperty("app_name").GetString();
@@ -48,7 +49,20 @@ public record AgentEvent(string Kind, string? AppId, string? AppName, AvailableA
             }).ToArray();
             if (apps.Select(a => a.Id).Distinct().Count() != apps.Length) throw new InvalidDataException("重复的应用 ID");
         }
-        return new(kind, id, name, apps);
+        IconObservation? icon = null;
+        if (hasIcon) {
+            var item = root.GetProperty("icon");
+            string? Text(string key) => item.TryGetProperty(key, out var v) && v.ValueKind != JsonValueKind.Null ? v.GetString() : null;
+            bool? Flag(string key) => item.TryGetProperty(key, out var v) && v.ValueKind != JsonValueKind.Null ? v.GetBoolean() : null;
+            var instance = Text("instance_id"); var fingerprint = Text("fingerprint"); var iconName = Text("icon_name");
+            var colors = item.GetProperty("colors").EnumerateArray().Select(c => c.GetString() ?? "").ToArray();
+            if (string.IsNullOrEmpty(instance) || instance.Length > 1024 || instance.Any(char.IsControl)
+                || fingerprint?.Length > 128 || fingerprint?.Any(char.IsControl) == true
+                || iconName?.Length > 1024 || iconName?.Any(char.IsControl) == true
+                || colors.Length > 16 || colors.Any(c => !NotificationRule.IsColor(c))) throw new InvalidDataException("无效的图标信息");
+            icon = new(instance, fingerprint, iconName, Flag("colorful"), colors, Flag("flashing"), Flag("attention"), Flag("removed") == true);
+        }
+        return new(kind, id, name, apps, icon);
     }
 }
 

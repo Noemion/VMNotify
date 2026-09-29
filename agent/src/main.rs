@@ -1,6 +1,7 @@
 mod adapters;
 mod detector;
 mod discovery;
+mod icon;
 use discovery::{discover, instance_key, property, variant_string, Instance};
 
 use adapters::{App, AttentionDetector, AvailableApp};
@@ -22,6 +23,8 @@ use tokio::{
 #[serde(deny_unknown_fields)]
 struct Config {
     apps: Vec<App>,
+    #[serde(default)]
+    sample_intervals: HashMap<String, u64>,
 }
 
 struct Tracked {
@@ -32,7 +35,23 @@ struct Tracked {
     active: bool,
     status_active: bool,
     flashing: bool,
+    features: icon::Features,
+    last_observation: Option<Instant>,
+    observed_flashing: bool,
+    observed_attention: Option<bool>,
+    next_sample: Instant,
     _worker: AbortOnDrop,
+}
+
+impl Tracked {
+    fn request_sample(&mut self, now: Instant, milliseconds: u64) {
+        if now >= self.next_sample && self.sample.try_send(()).is_ok() {
+            self.next_sample += Duration::from_millis(milliseconds);
+            if self.next_sample <= now {
+                self.next_sample = now + Duration::from_millis(milliseconds);
+            }
+        }
+    }
 }
 
 struct AbortOnDrop(tokio::task::JoinHandle<()>);
@@ -47,6 +66,7 @@ struct IconSample {
     fingerprint: Option<u64>,
     status: Option<bool>,
     at: Instant,
+    features: icon::Features,
 }
 
 fn track(
@@ -100,6 +120,7 @@ fn track(
             } else {
                 None
             };
+            let features = icon::analyze(pixels.as_deref(), name.as_deref());
             let status = status
                 .and_then(|s| variant_string(&s))
                 .and_then(|s| match s.as_str() {
@@ -113,6 +134,7 @@ fn track(
                     fingerprint,
                     status,
                     at: Instant::now(),
+                    features,
                 })
                 .await
                 .is_err()
@@ -129,6 +151,11 @@ fn track(
         active: false,
         status_active: false,
         flashing: false,
+        features: icon::Features::default(),
+        last_observation: None,
+        observed_flashing: false,
+        observed_attention: None,
+        next_sample: Instant::now() + Duration::from_millis(250),
         _worker: AbortOnDrop(worker),
     }
 }
@@ -186,7 +213,36 @@ async fn emit_event(kind: &str, app: Option<&App>, apps: Option<&[AvailableApp]>
         app_name: app.map(|a| a.name.as_str()),
         apps,
     };
-    let mut bytes = serde_json::to_vec(&event)?;
+    write_event(&event).await
+}
+
+#[derive(Serialize)]
+struct Observation<'a> {
+    instance_id: &'a str,
+    #[serde(flatten)]
+    features: &'a icon::Features,
+    flashing: Option<bool>,
+    attention: Option<bool>,
+    removed: bool,
+}
+
+async fn emit_observation(
+    key: &str,
+    entry: &Tracked,
+    attention: Option<bool>,
+    removed: bool,
+) -> Result<()> {
+    // Additive heartbeat payload: older receivers safely ignore these fields.
+    write_event(&serde_json::json!({
+        "v": 1, "kind": "heartbeat", "app_id": entry.app.id, "app_name": entry.app.name,
+        "timestamp_ms": SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis(),
+        "icon": Observation { instance_id: key, features: &entry.features,
+            flashing: entry.features.fingerprint.as_ref().map(|_| entry.flashing), attention, removed }
+    })).await
+}
+
+async fn write_event(event: &impl Serialize) -> Result<()> {
+    let mut bytes = serde_json::to_vec(event)?;
     bytes.push(b'\n');
     // Backpressure is bounded by a deadline; SSH loss cannot grow an event queue.
     timeout(Duration::from_secs(5), async {
@@ -261,11 +317,19 @@ fn pulse_sender(line: &str) -> Option<String> {
 fn config() -> Result<(Config, bool)> {
     let mut cfg = Config {
         apps: adapters::builtin_apps(),
+        sample_intervals: HashMap::new(),
     };
     let mut demo = false;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "--sample-intervals" => {
+                cfg.sample_intervals = serde_json::from_str(
+                    &args
+                        .next()
+                        .context("--sample-intervals needs a JSON object")?,
+                )?;
+            }
             "--config" => {
                 let custom: Config = serde_json::from_str(&std::fs::read_to_string(
                     args.next().context("--config needs a path")?,
@@ -278,6 +342,7 @@ fn config() -> Result<(Config, bool)> {
                     cfg.apps.retain(|a| a.id != app.id);
                     cfg.apps.push(app);
                 }
+                cfg.sample_intervals.extend(custom.sample_intervals);
             }
             "--demo" => demo = true,
             "--version" => {
@@ -285,7 +350,7 @@ fn config() -> Result<(Config, bool)> {
                 std::process::exit(0);
             }
             "--help" => {
-                println!("vmnotify-agent [--config FILE] [--demo]\nRun as the logged-in Linux desktop user. Emits JSON Lines on stdout.");
+                println!("vmnotify-agent [--config FILE] [--sample-intervals JSON] [--demo]\nSample intervals map app IDs to milliseconds (250..60000, step 250). Run as the logged-in Linux desktop user. Emits JSON Lines on stdout.");
                 std::process::exit(0);
             }
             _ => bail!("unknown argument: {arg}"),
@@ -293,6 +358,19 @@ fn config() -> Result<(Config, bool)> {
     }
     if cfg.apps.is_empty() || cfg.apps.len() > 64 {
         bail!("configure 1..64 apps");
+    }
+    if cfg.sample_intervals.len() > 64
+        || cfg.sample_intervals.iter().any(|(id, ms)| {
+            id.is_empty()
+                || id.len() > 64
+                || !id
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
+                || !(250..=60000).contains(ms)
+                || ms % 250 != 0
+        })
+    {
+        bail!("invalid sample intervals");
     }
     let mut ids = std::collections::HashSet::new();
     for app in &cfg.apps {
@@ -394,7 +472,7 @@ async fn monitor(cfg: Config) -> Result<()> {
                 let Some(line) = line? else { bail!("D-Bus monitor exited: {}", child.wait().await?); };
                 if let Some(entry) = pulse_sender(&line).and_then(|s| tracked.get_mut(&s)) {
                     // Coalesce redraw requests; sampling must not block heartbeats.
-                    let _ = entry.sample.try_send(());
+                    entry.request_sample(Instant::now(), *cfg.sample_intervals.get(&entry.app.id).unwrap_or(&250));
                 }
             }
             Some(sample) = icon_rx.recv() => {
@@ -405,6 +483,16 @@ async fn monitor(cfg: Config) -> Result<()> {
                     }
                     entry.status_active = sample.status.unwrap_or(false);
                     entry.active = entry.status_active || entry.flashing;
+                    let changed = entry.features != sample.features || entry.observed_flashing != entry.flashing
+                        || entry.observed_attention != sample.status;
+                    entry.features = sample.features;
+                    if changed || cfg.sample_intervals.get(&entry.app.id).is_some_and(|ms| *ms >= 1000)
+                        || entry.last_observation.is_none_or(|last| sample.at.duration_since(last) >= Duration::from_secs(1)) {
+                        emit_observation(&sample.key, entry, sample.status, false).await?;
+                        entry.last_observation = Some(sample.at);
+                        entry.observed_flashing = entry.flashing;
+                        entry.observed_attention = sample.status;
+                    }
                 }
             }
             changed = discovery_rx.changed() => {
@@ -414,8 +502,16 @@ async fn monitor(cfg: Config) -> Result<()> {
                     Ok(found) => {
                         if discovery_failed { emit("ready", None).await?; }
                         discovery_failed = false;
+                        for (key, entry) in &tracked {
+                            if !found.contains_key(key) { emit_observation(key, entry, None, true).await?; }
+                        }
                         tracked.retain(|key, _| found.contains_key(key));
-                        for (key, instance) in found { tracked.entry(key.clone()).or_insert_with(|| track(instance, key, icon_tx.clone())); }
+                        for (key, instance) in found { tracked.entry(key.clone()).or_insert_with(|| {
+                            let ms = *cfg.sample_intervals.get(&instance.app.id).unwrap_or(&250);
+                            let mut entry = track(instance, key, icon_tx.clone());
+                            entry.next_sample = Instant::now() + Duration::from_millis(ms);
+                            entry
+                        }); }
                     }
                     Err(err) => {
                         if !discovery_failed { eprintln!("discovery unavailable: {err:#}"); emit("degraded", None).await?; }
@@ -433,7 +529,7 @@ async fn monitor(cfg: Config) -> Result<()> {
                 for entry in tracked.values_mut() {
                     if entry.detector.tick(Instant::now()) { entry.flashing = false; }
                     entry.active = entry.status_active || entry.flashing;
-                    let _ = entry.sample.try_send(());
+                    entry.request_sample(Instant::now(), *cfg.sample_intervals.get(&entry.app.id).unwrap_or(&250));
                 }
             }
             _ = heartbeat.tick() => emit("heartbeat", None).await?,

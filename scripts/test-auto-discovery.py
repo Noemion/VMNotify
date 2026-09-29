@@ -36,9 +36,12 @@ def main():
         class Icon(dbus.service.Object):
             status = "Active"
             pixel = 0
+            readable = True
 
             @dbus.service.method("org.freedesktop.DBus.Properties", in_signature="ss", out_signature="v")
             def Get(self, interface, prop):
+                if not self.readable and prop in ("Status", "IconName", "IconPixmap"):
+                    raise dbus.exceptions.DBusException("temporary read failure")
                 if prop == "Status":
                     return dbus.String(self.status, variant_level=1)
                 if prop == "Id":
@@ -94,9 +97,10 @@ def main():
                 second.status = "Active"
                 second.NewStatus(second.status)
             if 24 <= n < 32:
-                second.pixel = n % 2
+                second.pixel = (n % 2) * 255
             else:
                 second.pixel = 0
+            second.readable = not (33 <= n <= 34)
             second.NewIcon()
             if n >= 38:
                 loop.quit()
@@ -115,6 +119,19 @@ def main():
         assert all(sum(a["id"].startswith("auto-") for a in apps) == 1 for apps in snapshots), snapshots
         transitions = [e["kind"] for e in events if e["kind"] in ("attention", "cleared")]
         assert transitions == ["attention", "cleared", "attention", "cleared"], transitions
+        icons = [e["icon"] for e in events if "icon" in e]
+        assert icons and any(i["removed"] for i in icons), "missing icon snapshots/removal"
+        assert any(i["flashing"] is True for i in icons), "missing flashing state"
+        assert any(i["attention"] is True for i in icons), "missing attention state"
+        assert any(i["fingerprint"] for i in icons), "missing stable icon identity"
+        assert any(i["fingerprint"] is None and i["colorful"] is None and i["attention"] is None for i in icons), "read failure must be unknown"
+        if "--icon-name" in sys.argv:
+            assert {i["icon_name"] for i in icons} >= {"chat-0", "chat-255"}, "icon names must be exposed verbatim"
+            assert all(i["colorful"] is None and i["colors"] == [] for i in icons), "name-only icons cannot imply grayscale"
+        else:
+            assert any(i["colorful"] is False and "#000000" in i["colors"] for i in icons), "black pixel must be grayscale"
+            assert any(i["colorful"] is True and "#FF0000" in i["colors"] for i in icons), "network-order ARGB must decode red"
+        print("PASS: real D-Bus icon telemetry, stable identity, color/name capability and instance removal")
         print("PASS: no-config discovery, unsupported exclusion, service-only/custom paths, multi-instance status and "
               + ("icon-name flashing" if "--icon-name" in sys.argv else "pixel flashing"))
     finally:

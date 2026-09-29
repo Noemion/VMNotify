@@ -12,6 +12,7 @@ public sealed record Settings
     public bool AutoConnect { get; init; } = true;
     public bool SilentStartup { get; init; }
     public string[] EnabledApps { get; init; } = [];
+    public Dictionary<string, NotificationRule> Rules { get; init; } = new();
     public bool ScheduleEnabled { get; init; }
     [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<ScheduleDays>))]
     public ScheduleDays ScheduleDays { get; init; } = ScheduleDays.EveryDay;
@@ -20,6 +21,8 @@ public sealed record Settings
 
     public void Validate()
     {
+        if (Rules == null || Rules.Count > 64) throw new ArgumentException("通知规则最多支持 64 个应用。");
+        foreach (var rule in Rules.Values) { if (rule == null) throw new ArgumentException("通知规则不能为空。"); rule.Validate(); }
         if (!Enum.IsDefined(ScheduleDays)) throw new ArgumentException("无效的定时连接生效日期模式。");
         if (ScheduleEnabled) _ = DailySchedule.Parse(ConnectTime, DisconnectTime);
         if (!Regex.IsMatch(Host, @"\A[a-zA-Z0-9][a-zA-Z0-9.:%_-]{0,252}\z") || Host.Contains('\n'))
@@ -43,7 +46,10 @@ public sealed record Settings
             "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=3",
             "-p", Port.ToString(), "-l", User };
         if (IdentityFile.Length > 0) args.AddRange(["-i", IdentityFile]);
-        args.AddRange(["--", Host, "exec " + ShellQuote(AgentPath)]);
+        var intervals = Rules.Where(p => p.Value.SampleMilliseconds != 250).ToDictionary(p => p.Key, p => p.Value.SampleMilliseconds);
+        var command = "exec " + ShellQuote(AgentPath);
+        if (intervals.Count > 0) command += " --sample-intervals " + ShellQuote(System.Text.Json.JsonSerializer.Serialize(intervals));
+        args.AddRange(["--", Host, command]);
         return args.ToArray();
     }
 }

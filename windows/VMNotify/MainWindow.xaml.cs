@@ -19,6 +19,7 @@ internal sealed class AppChoice
     public required string Id { get; init; }
     public required string Name { get; init; }
     public required string Detail { get; init; }
+    public string RuleSummary { get; init; } = "";
     public bool Enabled { get; set; }
 }
 
@@ -94,6 +95,9 @@ public partial class MainWindow : Window
         ChinaWorkdaysInput.IsChecked = saved.ScheduleDays == ScheduleDays.ChinaWorkdays;
         ConnectTimeInput.Text = saved.ConnectTime;
         DisconnectTimeInput.Text = saved.DisconnectTime;
+        saved = saved with { Rules = saved.Rules ?? new() };
+        try { receiver.SetRules(saved.Rules); }
+        catch (ArgumentException ex) { WpfMessageBox.Show("通知规则无效，请重新设置：" + ex.Message, "VMNotify"); saved = saved with { Rules = new() }; }
         enabled = new(saved.EnabledApps); receiver.SetEnabledApps(enabled.ToArray());
         using (var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
             StartupInput.IsChecked = string.Equals(key?.GetValue("VMNotify") as string, StartupCommand(), StringComparison.OrdinalIgnoreCase);
@@ -109,6 +113,7 @@ public partial class MainWindow : Window
                     var message = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "zh"
                         ? ev.Kind == "reminder" ? $"虚拟机【{saved.Host}】中的【{ev.AppName}】仍有待查看的消息。" : $"虚拟机【{saved.Host}】中的【{ev.AppName}】有新消息。"
                         : ev.Kind == "reminder" ? $"Messages still need attention in [{ev.AppName}] on virtual machine [{saved.Host}]." : $"New message from [{ev.AppName}] on virtual machine [{saved.Host}].";
+                    if (ev.Message != null) message = $"虚拟机【{saved.Host}】中的【{ev.AppName}】：{ev.Message}";
                     LastNotification.Text = $"{message}  ·  {DateTime.Now:HH:mm}";
                     Diagnostics.Write("Notification dequeued: " + ev.AppId);
                     ShowNotification("VMNotify · " + ev.AppName, message);
@@ -207,7 +212,8 @@ public partial class MainWindow : Window
     private void RenderApps(AvailableApp[] apps)
     {
         displayed = apps;
-        AppItems.ItemsSource = apps.Select(a => new AppChoice { Id = a.Id, Name = a.Name, Enabled = enabled.Contains(a.Id), Detail = a.Description }).ToArray();
+        AppItems.ItemsSource = apps.Select(a => new AppChoice { Id = a.Id, Name = a.Name, Enabled = enabled.Contains(a.Id), Detail = a.Description,
+            RuleSummary = saved.Rules.TryGetValue(a.Id, out var rule) ? $"{rule.Description} · 检测 {rule.SampleMilliseconds / 1000d:0.##} 秒 · 持续 {rule.HoldSeconds} 秒 · " + (rule.RepeatSeconds == 0 ? "仅提醒一次" : $"每 {rule.RepeatSeconds} 秒提醒") : "闪烁或需要关注 · 检测 0.25 秒 · 每 3 分钟提醒" }).ToArray();
         EmptyApps.Visibility = apps.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         AppListHeading.Text = apps.Length == 0 ? "可转发的应用" : $"可转发的应用（{apps.Length}）";
     }
@@ -366,11 +372,7 @@ public partial class MainWindow : Window
         Directory.CreateDirectory(directory);
         // Preview data is illustrative, never saved or connected to a real machine.
         HostInput.Text = "192.0.2.10"; UserInput.Text = "desktop-user";
-        DownloadedPackages.ItemsSource = new[] {
-            new DownloadedUpdate("0.2.7", "VMNotify-0.2.7-win-x64-setup.exe", "", 0),
-            new DownloadedUpdate("0.2.6", "VMNotify-0.2.6-win-x64-setup.exe", "", 0)
-        };
-        NoDownloads.Visibility = Visibility.Collapsed;
+        await PreviewUpdateCleanup(directory);
         RenderApps([new("lanxin", "蓝信", true, "status-notifier-flash", "attention-only", true),
             new("auto-preview", "自动发现的应用", true, "status-notifier-auto", "attention-only")]);
         StatusTitle.Text = "正在接收虚拟机提醒"; StatusDetail.Text = "已连接。应用提醒会自动转发到这台电脑。";
@@ -387,6 +389,7 @@ public partial class MainWindow : Window
         foreach (bool light in new[] { false, true }) {
             SystemTheme.Apply(this, light);
             await PreviewSshHost(directory, light);
+            await PreviewRules(directory, light);
             UpdateLayout();
             if (((SolidColorBrush)OverviewNav.Foreground).Color != ((SolidColorBrush)Resources["MainText"]).Color
                 || ((SolidColorBrush)AutoConnectInput.Foreground).Color != ((SolidColorBrush)Resources["MainText"]).Color)
@@ -394,19 +397,20 @@ public partial class MainWindow : Window
             for (int i = 0; i < names.Length; i++) {
                 SelectPage(i); UpdateLayout(); await Task.Delay(150); HideScrollbarImmediately();
                 Capture(names[i] + (light ? "-light" : "-dark"));
+                if (i == 2) {
+                    Width = 900; UpdateLayout(); Capture("apps-900" + (light ? "-light" : "-dark"));
+                    Width = 1024; UpdateLayout();
+                }
                 if (i == 3) {
                     foreach (var previewWidth in new[] { 1024d, 900d }) {
                         Width = previewWidth; UpdateLayout();
-                        PageScroll.ScrollToEnd(); UpdateLayout(); ShowScrollbar(); await Task.Delay(150);
-                        var row = (System.Windows.Controls.ContentPresenter)DownloadedPackages.ItemContainerGenerator.ContainerFromIndex(0);
-                        var delete = (FrameworkElement)row.ContentTemplate.FindName("PackageDeleteButton", row);
+                        UpdateLayout(); await Task.Delay(150);
                         double Right(FrameworkElement element) => element.TranslatePoint(new System.Windows.Point(element.ActualWidth, 0), Root).X;
-                        if (Math.Abs(Right(ClearDownloadsButton) - Right(delete)) > 1)
-                            throw new InvalidOperationException("Bulk delete is not aligned with package actions");
-                        double barLeft = overlayBar!.TranslatePoint(new System.Windows.Point(0, 0), Root).X;
-                        if (Root.ActualWidth - Right(overlayBar) > 8 || barLeft <= Right(AboutPage))
-                            throw new InvalidOperationException("Scrollbar must be near the window edge and outside page content");
-                        Capture($"about-downloads-{previewWidth}" + (light ? "-light" : "-dark"));
+                        if (Right(DownloadUpdateButton) > Right(AboutPage)
+                            || CheckUpdateButton.TranslatePoint(new System.Windows.Point(), Root).Y != DownloadUpdateButton.TranslatePoint(new System.Windows.Point(), Root).Y)
+                            throw new InvalidOperationException("Update actions must fit on one row at minimum width");
+                        if (FindName("DownloadedPackages") != null) throw new InvalidOperationException("Download history must not be shown");
+                        Capture($"about-update-{previewWidth}" + (light ? "-light" : "-dark"));
                     }
                     Width = 1024; UpdateLayout();
                 }
@@ -427,6 +431,10 @@ public partial class MainWindow : Window
         PageScroll.ScrollToVerticalOffset(80); UpdateLayout(); await Task.Delay(150);
         if (overlayBar.Opacity < .9 || PageScroll.VerticalOffset <= 0) throw new InvalidOperationException("Scrollbar did not appear during scroll");
         if (Math.Abs(ConnectionPage.ActualWidth - width) > .1) throw new InvalidOperationException("Overlay scrollbar shifted layout");
+        var barRight = overlayBar.TranslatePoint(new System.Windows.Point(overlayBar.ActualWidth, 0), Root).X;
+        var barLeft = overlayBar.TranslatePoint(new System.Windows.Point(), Root).X;
+        if (Root.ActualWidth - barRight > 8 || barLeft <= ConnectionPage.TranslatePoint(new System.Windows.Point(ConnectionPage.ActualWidth, 0), Root).X)
+            throw new InvalidOperationException("Scrollbar must stay near the window edge and outside page content");
         Capture("scroll-active");
         await Task.Delay(1400);
         if (overlayBar.Opacity > .01) throw new InvalidOperationException("Scrollbar did not fade after scrolling");

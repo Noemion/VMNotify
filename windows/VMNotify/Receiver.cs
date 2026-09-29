@@ -16,6 +16,65 @@ internal sealed class Receiver
         public long LastQueued = now;
     }
     private readonly Dictionary<string, Alert> activeAlerts = new();
+    private Dictionary<string, NotificationRule> rules = new();
+    private CancellationTokenSource? currentSession;
+    private double SampleExpirySeconds(string id) => Math.Max(8, (rules.GetValueOrDefault(id)?.SampleMilliseconds ?? 250) / 1000d * 2 + 6);
+    private readonly Dictionary<string, AgentEvent> legacyAttention = new();
+    private sealed class Observed(AgentEvent ev, long now) {
+        public AgentEvent Event = ev;
+        public long Seen = now;
+        public RuleState State = new();
+    }
+    private readonly Dictionary<(string App, string Instance), Observed> observations = new();
+    public void SetRules(Dictionary<string, NotificationRule> values) {
+        if (values.Count > 64) throw new ArgumentException("通知规则最多支持 64 个应用。");
+        foreach (var value in values.Values) { if (value == null) throw new ArgumentException("通知规则不能为空。"); value.Validate(); }
+        lock (selectionLock) {
+            var changed = rules.Keys.Union(values.Keys).Where(id => rules.GetValueOrDefault(id) != values.GetValueOrDefault(id)).ToArray();
+            bool samplingChanged = changed.Any(id => (rules.GetValueOrDefault(id)?.SampleMilliseconds ?? 250) != (values.GetValueOrDefault(id)?.SampleMilliseconds ?? 250));
+            rules = new(values);
+            foreach (var id in changed) {
+                activeAlerts.Remove(id);
+                foreach (var pair in observations.Where(p => p.Key.App == id)) {
+                    pair.Value.State = new();
+                    if (rules.TryGetValue(id, out var rule) && clock.GetElapsedTime(pair.Value.Seen).TotalSeconds < SampleExpirySeconds(id))
+                        pair.Value.State.Update(rule, pair.Value.Event.Icon!, clock);
+                }
+                RefreshRuleAlert(id);
+                if (!rules.ContainsKey(id) && legacyAttention.TryGetValue(id, out var original)) ApplyAttention(original);
+            }
+            if (samplingChanged) currentSession?.Cancel();
+        }
+    }
+    public IconObservation[] GetIcons(string appId) {
+        lock (selectionLock) return observations.Where(p => p.Key.App == appId && clock.GetElapsedTime(p.Value.Seen).TotalSeconds < SampleExpirySeconds(appId))
+            .Select(p => p.Value.Event.Icon!).ToArray();
+    }
+    internal void ApplyObservation(AgentEvent ev) {
+        if (ev.Icon == null || ev.AppId == null) return;
+        lock (selectionLock) {
+            var key = (ev.AppId, ev.Icon.InstanceId);
+            if (ev.Icon.Removed) observations.Remove(key);
+            else {
+                if (!observations.TryGetValue(key, out var observed)) {
+                    if (observations.Count >= 64) throw new InvalidDataException("代理发送了过多托盘实例");
+                    observations[key] = observed = new(ev, clock.GetTimestamp());
+                }
+                // A stale sample must not count toward the continuous hold period.
+                if (clock.GetElapsedTime(observed.Seen).TotalSeconds >= SampleExpirySeconds(ev.AppId)) observed.State = new();
+                observed.Event = ev; observed.Seen = clock.GetTimestamp();
+                if (rules.TryGetValue(ev.AppId, out var rule)) observed.State.Update(rule, ev.Icon, clock);
+            }
+            RefreshRuleAlert(ev.AppId);
+        }
+    }
+    private void RefreshRuleAlert(string appId) {
+        if (!rules.TryGetValue(appId, out var rule)) return;
+        var active = observations.Where(p => p.Key.App == appId).Select(p => p.Value).FirstOrDefault(o => o.State.Active);
+        if (active == null) { activeAlerts.Remove(appId); return; }
+        ApplyAttention(active.Event with { Kind = "attention", Icon = null,
+            Message = string.IsNullOrWhiteSpace(rule.Message) ? "符合通知条件：" + rule.Description + "。" : rule.Message });
+    }
     private readonly TimeProvider clock;
     public Func<string, CancellationToken, Task<bool>>? ConfirmHost { get; set; }
     public string? AuthorizationHelper { get; set; }
@@ -23,8 +82,12 @@ internal sealed class Receiver
     public Receiver(TimeProvider? clock = null) { this.clock = clock ?? TimeProvider.System; }
     public void QueueReminders() {
         lock (selectionLock) {
+            foreach (var key in observations.Where(p => clock.GetElapsedTime(p.Value.Seen).TotalSeconds >= SampleExpirySeconds(p.Key.App)).Select(p => p.Key).ToArray()) {
+                observations.Remove(key); RefreshRuleAlert(key.App);
+            }
             foreach (var alert in activeAlerts.Values) {
-                if (!IsEnabled(alert.Original.AppId!) || clock.GetElapsedTime(alert.LastQueued) < TimeSpan.FromMinutes(3)) continue;
+                var repeat = rules.GetValueOrDefault(alert.Original.AppId!)?.RepeatSeconds ?? 180;
+                if (repeat == 0 || !IsEnabled(alert.Original.AppId!) || clock.GetElapsedTime(alert.LastQueued) < TimeSpan.FromSeconds(repeat)) continue;
                 alert.Pending = alert.Original with { Kind = "reminder" };
                 alert.LastQueued = clock.GetTimestamp();
                 Notifications.Writer.TryWrite(alert.Pending);
@@ -65,7 +128,12 @@ internal sealed class Receiver
             if (IsEnabled(ev.AppId!)) Notifications.Writer.TryWrite(ev);
         }
     }
-    private void ClearAttention() { lock (selectionLock) activeAlerts.Clear(); }
+    private void ClearAttention() { lock (selectionLock) { activeAlerts.Clear(); observations.Clear(); legacyAttention.Clear(); } }
+    internal void ApplyLegacyAttention(AgentEvent ev) { lock (selectionLock) {
+        if (ev.Kind == "cleared") legacyAttention.Remove(ev.AppId!);
+        else { legacyAttention[ev.AppId!] = ev; if (legacyAttention.Count > 64) throw new InvalidDataException("代理发送了过多应用"); }
+        if (!rules.ContainsKey(ev.AppId!)) ApplyAttention(ev);
+    } }
     public bool IsEnabled(string id) => Volatile.Read(ref enabledApps).Contains(id);
     public string Status => Volatile.Read(ref status);
     private void SetStatus(string text) { Volatile.Write(ref status, text); Diagnostics.Write("Status: " + text); }
@@ -80,15 +148,21 @@ internal sealed class Receiver
 
     public async Task Run(Settings settings, CancellationToken stop)
     {
+        SetRules(settings.Rules);
         int retry = 1;
         bool rejected = false;
         while (!stop.IsCancellationRequested)
         {
             var started = Stopwatch.StartNew();
-            try { await Session(settings, stop); }
+            using var restart = CancellationTokenSource.CreateLinkedTokenSource(stop);
+            Settings sessionSettings;
+            lock (selectionLock) { currentSession = restart; sessionSettings = settings with { Rules = new(rules) }; }
+            try { await Session(sessionSettings, restart.Token); }
             catch (AuthorizationRejectedException) { rejected = true; break; }
             catch (OperationCanceledException) when (stop.IsCancellationRequested) { break; }
+            catch (OperationCanceledException) when (restart.IsCancellationRequested) { continue; }
             catch (Exception ex) { SetStatus("连接中断：" + ex.Message[..Math.Min(300, ex.Message.Length)]); }
+            finally { lock (selectionLock) { if (ReferenceEquals(currentSession, restart)) currentSession = null; } }
             if (stop.IsCancellationRequested) break;
             if (started.Elapsed > TimeSpan.FromMinutes(1)) retry = 1;
             SetStatus(Status + $"（{retry} 秒后重试）");
@@ -140,8 +214,16 @@ internal sealed class Receiver
                 session.CancelAfter(TimeSpan.FromSeconds(45));
                 if (ev.Kind == "ready") { ready = true; SetStatus("已连接 · 正在监听"); }
                 if (ev.Kind == "degraded") { ClearAttention(); SetStatus("已连接 · 桌面托盘接口暂不可用"); }
-                if (ev.Kind == "apps") Volatile.Write(ref availableApps, ev.Apps!);
-                if (ev.Kind == "cleared" || (ev.Kind == "attention" && ready)) ApplyAttention(ev);
+                if (ev.Kind == "apps") {
+                    Volatile.Write(ref availableApps, ev.Apps!);
+                    lock (selectionLock) {
+                        foreach (var key in observations.Keys.Where(k => !ev.Apps!.Any(a => a.Id == k.App && a.Running)).ToArray()) {
+                            observations.Remove(key); RefreshRuleAlert(key.App);
+                        }
+                    }
+                }
+                if (ev.Icon != null && ready) ApplyObservation(ev);
+                if (ev.Kind == "cleared" || (ev.Kind == "attention" && ready)) ApplyLegacyAttention(ev);
             }
             if (authorization?.Rejected == true) throw new AuthorizationRejectedException();
             throw new IOException(Volatile.Read(ref lastError));
