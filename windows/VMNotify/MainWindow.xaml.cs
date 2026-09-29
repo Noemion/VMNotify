@@ -21,6 +21,8 @@ internal sealed class AppChoice
     public required string Detail { get; init; }
     public string RuleSummary { get; init; } = "";
     public bool Enabled { get; set; }
+    public bool CanEnable { get; init; } = true;
+    public string IgnoreAction { get; init; } = "忽略";
 }
 
 public partial class MainWindow : Window
@@ -95,7 +97,8 @@ public partial class MainWindow : Window
         ChinaWorkdaysInput.IsChecked = saved.ScheduleDays == ScheduleDays.ChinaWorkdays;
         ConnectTimeInput.Text = saved.ConnectTime;
         DisconnectTimeInput.Text = saved.DisconnectTime;
-        saved = saved with { Rules = saved.Rules ?? new() };
+        saved = saved with { Rules = saved.Rules ?? new(), IgnoredApps = saved.IgnoredApps ?? new() };
+        saved = saved with { EnabledApps = saved.EnabledApps.Where(id => !saved.IgnoredApps.ContainsKey(id)).ToArray() };
         try { receiver.SetRules(saved.Rules); }
         catch (ArgumentException ex) { WpfMessageBox.Show("通知规则无效，请重新设置：" + ex.Message, "VMNotify"); saved = saved with { Rules = new() }; }
         enabled = new(saved.EnabledApps); receiver.SetEnabledApps(enabled.ToArray());
@@ -212,10 +215,15 @@ public partial class MainWindow : Window
     private void RenderApps(AvailableApp[] apps)
     {
         displayed = apps;
-        AppItems.ItemsSource = apps.Select(a => new AppChoice { Id = a.Id, Name = a.Name, Enabled = enabled.Contains(a.Id), Detail = a.Description,
+        var filtered = AppCatalog.Filter(apps, saved, AppSearchInput.Text, showingIgnored);
+        AppItems.ItemsSource = filtered.Select(a => new AppChoice { Id = a.Id, Name = a.Name, Enabled = !showingIgnored && enabled.Contains(a.Id), Detail = showingIgnored ? "已忽略 · 不接收提醒，恢复后可重新开启" : a.Description,
+            CanEnable = !showingIgnored, IgnoreAction = showingIgnored ? "恢复显示" : "忽略",
             RuleSummary = saved.Rules.TryGetValue(a.Id, out var rule) ? $"{rule.Description} · 检测 {rule.SampleMilliseconds / 1000d:0.##} 秒 · 持续 {rule.HoldSeconds} 秒 · " + (rule.RepeatSeconds == 0 ? "仅提醒一次" : $"每 {rule.RepeatSeconds} 秒提醒") : "闪烁或需要关注 · 检测 0.25 秒 · 每 3 分钟提醒" }).ToArray();
-        EmptyApps.Visibility = apps.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        AppListHeading.Text = apps.Length == 0 ? "可转发的应用" : $"可转发的应用（{apps.Length}）";
+        EmptyApps.Visibility = filtered.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        EmptyAppsTitle.Text = AppSearchInput.Text.Trim().Length > 0 ? "没有匹配的应用" : showingIgnored ? "没有已忽略的应用" : "尚未发现可显示的应用";
+        EmptyAppsDetail.Text = AppSearchInput.Text.Trim().Length > 0 ? "试试其他应用名称，或清空搜索。" : showingIgnored ? "忽略的应用会显示在这里，可随时恢复。" : "连接虚拟机并重新探测，或在“已忽略的应用”中恢复应用。";
+        AppListHeading.Text = $"{(showingIgnored ? "已忽略的应用" : "可转发的应用")}（{filtered.Length}）";
+        IgnoredAppsButton.Content = showingIgnored ? "返回应用列表" : $"已忽略的应用（{saved.IgnoredApps.Count}）";
     }
     private void AppToggleClicked(object sender, RoutedEventArgs e)
     {
@@ -227,6 +235,7 @@ public partial class MainWindow : Window
     }
     private void RefreshStatus()
     {
+        RefreshDiscoveryStatus();
         bool connected = receiver.Status.StartsWith("已连接");
         var status = receiver.Status;
         bool retrying = status.Contains("后重试") || status.StartsWith("正在");
@@ -398,7 +407,19 @@ public partial class MainWindow : Window
                 SelectPage(i); UpdateLayout(); await Task.Delay(150); HideScrollbarImmediately();
                 Capture(names[i] + (light ? "-light" : "-dark"));
                 if (i == 2) {
-                    Width = 900; UpdateLayout(); Capture("apps-900" + (light ? "-light" : "-dark"));
+                    Width = 900; UpdateLayout();
+                    if (AppListHeading.TranslatePoint(new System.Windows.Point(AppListHeading.ActualWidth, 0), Root).X > RediscoverButton.TranslatePoint(new System.Windows.Point(), Root).X
+                        || AppSearchInput.ActualWidth < 150
+                        || IgnoredAppsButton.TranslatePoint(new System.Windows.Point(IgnoredAppsButton.ActualWidth, 0), Root).X > AppsPage.TranslatePoint(new System.Windows.Point(AppsPage.ActualWidth, 0), Root).X + 1)
+                        throw new InvalidOperationException("Application discovery/search actions must fit at minimum width");
+                    Capture("apps-900" + (light ? "-light" : "-dark"));
+                    var catalogSettings = saved;
+                    var catalogApps = displayed ?? [];
+                    saved = AppCatalog.ToggleIgnored(saved, "preview-atrust", "aTrustTray2");
+                    showingIgnored = true; AppSearchInput.Text = "ATRUST"; RenderApps(catalogApps); UpdateLayout();
+                    if (AppItems.Items.Count != 1) throw new InvalidOperationException("Ignored apps search must include disconnected apps");
+                    Capture("apps-ignored-900" + (light ? "-light" : "-dark"));
+                    saved = catalogSettings; showingIgnored = false; AppSearchInput.Clear(); RenderApps(catalogApps);
                     Width = 1024; UpdateLayout();
                 }
                 if (i == 3) {

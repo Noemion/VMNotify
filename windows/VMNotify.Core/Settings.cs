@@ -12,6 +12,7 @@ public sealed record Settings
     public bool AutoConnect { get; init; } = true;
     public bool SilentStartup { get; init; }
     public string[] EnabledApps { get; init; } = [];
+    public Dictionary<string, string> IgnoredApps { get; init; } = new();
     public Dictionary<string, NotificationRule> Rules { get; init; } = new();
     public bool ScheduleEnabled { get; init; }
     [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<ScheduleDays>))]
@@ -37,7 +38,7 @@ public sealed record Settings
     // OpenSSH passes the remote command to a POSIX shell, even with ArgumentList.
     public static string ShellQuote(string value) => "'" + value.Replace("'", "'\"'\"'") + "'";
 
-    public string[] SshArguments(bool authorizeHost = false)
+    public string[] SshArguments(bool authorizeHost = false, bool includeVersion = false)
     {
         Validate();
         var args = new List<string> { "-T", "-o", authorizeHost ? "BatchMode=no" : "BatchMode=yes", "-o", authorizeHost ? "StrictHostKeyChecking=ask" : "StrictHostKeyChecking=yes",
@@ -49,6 +50,7 @@ public sealed record Settings
         var intervals = Rules.Where(p => p.Value.SampleMilliseconds != 250).ToDictionary(p => p.Key, p => p.Value.SampleMilliseconds);
         var command = "exec " + ShellQuote(AgentPath);
         if (intervals.Count > 0) command += " --sample-intervals " + ShellQuote(System.Text.Json.JsonSerializer.Serialize(intervals));
+        if (includeVersion) command = ShellQuote(AgentPath) + " --version && " + command;
         args.AddRange(["--", Host, command]);
         return args.ToArray();
     }

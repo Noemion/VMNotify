@@ -11,11 +11,18 @@ public record AvailableApp(string Id, string Name, bool Running, string Adapter,
     public override string ToString() => $"{Name} — {(Running ? "正在监听" : "已安装，未运行")}（仅提醒）";
 }
 
-public record AgentEvent(string Kind, string? AppId, string? AppName, AvailableApp[]? Apps = null, IconObservation? Icon = null, string? Message = null)
+public record AgentEvent(string Kind, string? AppId, string? AppName, AvailableApp[]? Apps = null, IconObservation? Icon = null, string? Message = null, string? AgentVersion = null)
 {
     public static AgentEvent Parse(string line)
     {
         if (line.Length > 32768) throw new InvalidDataException("事件过长");
+        // Requested by the receiver before starting the event stream, including on old agents.
+        if (line.StartsWith("vmnotify-agent ", StringComparison.Ordinal)) {
+            var version = line[15..].Trim();
+            if (version.Length > 32 || !Version.TryParse(version, out var parsed) || parsed.Build < 0 || parsed.Revision >= 0)
+                throw new InvalidDataException("无效的 Linux 采集端版本。");
+            return new("agent_info", null, null, AgentVersion: parsed.ToString());
+        }
         using var doc = JsonDocument.Parse(line);
         var root = doc.RootElement;
         if (root.GetProperty("v").GetInt32() != 1) throw new InvalidDataException("不支持的协议版本");

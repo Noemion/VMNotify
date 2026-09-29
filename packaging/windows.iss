@@ -50,8 +50,8 @@ Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.i
 [Messages]
 english.WelcomeLabel1=Welcome to VMNotify
 chinesesimplified.WelcomeLabel1=欢迎安装 VMNotify
-english.WelcomeLabel2=Receive message alerts from supported apps in your Linux virtual machine on Windows, without switching windows.%n%nConnect over SSH, discover apps, and choose which notifications to forward.%n%nSettings are saved automatically. VMNotify runs in the tray and supports reconnecting and scheduled connections.%n%nInstall the Linux agent before connecting. Windows requires .NET Desktop Runtime 10.0 and the OpenSSH client.%n%nNext, choose the installation folder and Start Menu folder, then confirm installation.
-chinesesimplified.WelcomeLabel2=将 Linux 虚拟机中受支持应用的消息提醒转发到 Windows，无需切换窗口。%n%n通过 SSH 连接虚拟机，自动发现应用，自主选择要转发的通知。%n%n自动保存设置，支持托盘后台运行、断线重连和定时连接。%n%n使用前需安装 Linux 采集端；Windows 端需要 .NET Desktop Runtime 10.0 和 OpenSSH 客户端。%n%n接下来选择安装路径和开始菜单名称，再确认安装。
+english.WelcomeLabel2=Receive message alerts from supported apps in your Linux virtual machine on Windows, without switching windows.%n%nConnect over SSH, discover apps, and choose which notifications to forward.%n%nSettings are saved automatically. VMNotify runs in the tray and supports reconnecting and scheduled connections.%n%nLinux x64 and ARM64 agents are included and deployed over SSH when connecting. Windows requires .NET Desktop Runtime 10.0 and the OpenSSH client.%n%nNext, choose the installation folder and Start Menu folder, then confirm installation.
+chinesesimplified.WelcomeLabel2=将 Linux 虚拟机中受支持应用的消息提醒转发到 Windows，无需切换窗口。%n%n通过 SSH 连接虚拟机，自动发现应用，自主选择要转发的通知。%n%n自动保存设置，支持托盘后台运行、断线重连和定时连接。%n%n内置 Linux x64 和 ARM64 采集端，连接时通过 SSH 自动部署；Windows 端需要 .NET Desktop Runtime 10.0 和 OpenSSH 客户端。%n%n接下来选择安装路径和开始菜单名称，再确认安装。
 
 [CustomMessages]
 english.ActionInstall=Install

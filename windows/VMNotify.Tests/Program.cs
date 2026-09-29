@@ -1,5 +1,20 @@
 using VMNotify;
 
+if (args.Length == 2 && args[0] == "--bundle-files") {
+    await BundleTests.VerifyFiles(args[1]);
+    return;
+}
+
+if (args.Length == 5 && args[0] == "--ssh-bundle") {
+    await BundleTests.Integration(args[1], args[2], args[3], args[4]);
+    return;
+}
+
+if (args.Length == 4 && args[0] == "--ssh-rediscover") {
+    await DiscoveryTests.Integration(args[1], args[2], args[3]);
+    return;
+}
+
 if (args.Length == 5 && args[0] == "--ssh-sampling") {
     var liveSettings = new Settings { Host = args[1], User = args[2], AgentPath = args[3], Rules = new() {
         [args[4]] = new NotificationRule { Condition = RuleCondition.Grayscale, SampleMilliseconds = 1000, HoldSeconds = 2, RepeatSeconds = 60 }
@@ -169,3 +184,6 @@ TimingTests.Run();
 RuleTests.Run();
 CalendarTests.Run();
 SshAuthorizationTests.Run();
+DiscoveryTests.Run();
+await BundleTests.Run();
+CatalogTests.Run();

@@ -18,6 +18,22 @@ internal sealed class Receiver
     private readonly Dictionary<string, Alert> activeAlerts = new();
     private Dictionary<string, NotificationRule> rules = new();
     private CancellationTokenSource? currentSession;
+    private string? agentVersion;
+    private long inventoryRevision;
+    private long discoverySessionRevision;
+    public AgentBundle Bundle { get; init; } = new(Path.Combine(AppContext.BaseDirectory, "linux-agent"));
+    public string? AgentVersion => Volatile.Read(ref agentVersion);
+    public long InventoryRevision => Interlocked.Read(ref inventoryRevision);
+    public long DiscoverySessionRevision => Interlocked.Read(ref discoverySessionRevision);
+    public bool CanRediscover { get { lock (selectionLock) return currentSession is { IsCancellationRequested: false } && Status.StartsWith("已连接"); } }
+    public bool RequestRediscovery() {
+        lock (selectionLock) {
+            if (!CanRediscover) return false;
+            SetStatus("正在重新探测托盘图标…");
+            currentSession!.Cancel();
+            return true;
+        }
+    }
     private double SampleExpirySeconds(string id) => Math.Max(8, (rules.GetValueOrDefault(id)?.SampleMilliseconds ?? 250) / 1000d * 2 + 6);
     private readonly Dictionary<string, AgentEvent> legacyAttention = new();
     private sealed class Observed(AgentEvent ev, long now) {
@@ -176,18 +192,23 @@ internal sealed class Receiver
 
     private async Task Session(Settings settings, CancellationToken stop)
     {
+        var discoveryRevision = Interlocked.Increment(ref discoverySessionRevision);
         SetStatus("正在通过 SSH 连接…");
+        Volatile.Write(ref agentVersion, null);
         ClearAttention();
         Volatile.Write(ref availableApps, []);
         var info = new ProcessStartInfo(SshPath()) { RedirectStandardOutput = true, RedirectStandardError = true,
             RedirectStandardInput = true, UseShellExecute = false, CreateNoWindow = true,
             StandardOutputEncoding = new UTF8Encoding(false, true), StandardErrorEncoding = Encoding.UTF8 };
         bool authorize = ConfirmHost != null && AuthorizationHelper != null;
-        foreach (var arg in settings.SshArguments(authorize)) info.ArgumentList.Add(arg);
+        var arguments = settings.SshArguments(authorize, includeVersion: true);
+        bool bundled = Bundle.Exists;
+        if (bundled) arguments[^1] = Bundle.Command(settings);
+        foreach (var arg in arguments) info.ArgumentList.Add(arg);
         using var session = CancellationTokenSource.CreateLinkedTokenSource(stop);
         using var authorization = authorize ? new SshAuthorization(info, AuthorizationHelper!) : null;
         using var process = Process.Start(info) ?? throw new IOException("无法启动 SSH");
-        process.StandardInput.Close();
+        if (!bundled) process.StandardInput.Close();
         session.CancelAfter(TimeSpan.FromSeconds(45));
         var authorizationTask = authorization?.Listen(async (prompt, ct) => {
             session.CancelAfter(Timeout.InfiniteTimeSpan);
@@ -209,13 +230,31 @@ internal sealed class Receiver
         {
             await foreach (var line in Protocol.Lines(process.StandardOutput, session.Token))
             {
+                if (bundled && line.StartsWith("vmnotify-bootstrap ", StringComparison.Ordinal)) {
+                    var (agent, install) = Bundle.Select(line);
+                    if (install) {
+                        SetStatus($"正在安装或升级 Linux 采集端至 {agent.Version}…");
+                        session.CancelAfter(TimeSpan.FromMinutes(2));
+                        var bytes = await Bundle.ReadVerified(agent, session.Token);
+                        await process.StandardInput.WriteAsync("install\n".AsMemory(), session.Token);
+                        await process.StandardInput.FlushAsync(session.Token);
+                        await process.StandardInput.BaseStream.WriteAsync(bytes, session.Token);
+                    } else {
+                        await process.StandardInput.WriteAsync("keep\n".AsMemory(), session.Token);
+                    }
+                    process.StandardInput.Close();
+                    bundled = false;
+                    continue;
+                }
                 var ev = AgentEvent.Parse(line);
                 if (ev.Kind != "heartbeat" && ev.Kind != "apps") Diagnostics.Write("Agent event: " + ev.Kind + " app=" + ev.AppId + " enabled=" + (ev.AppId != null && IsEnabled(ev.AppId)));
                 session.CancelAfter(TimeSpan.FromSeconds(45));
+                if (ev.Kind == "agent_info") Volatile.Write(ref agentVersion, ev.AgentVersion);
                 if (ev.Kind == "ready") { ready = true; SetStatus("已连接 · 正在监听"); }
                 if (ev.Kind == "degraded") { ClearAttention(); SetStatus("已连接 · 桌面托盘接口暂不可用"); }
                 if (ev.Kind == "apps") {
                     Volatile.Write(ref availableApps, ev.Apps!);
+                    Interlocked.Exchange(ref inventoryRevision, discoveryRevision);
                     lock (selectionLock) {
                         foreach (var key in observations.Keys.Where(k => !ev.Apps!.Any(a => a.Id == k.App && a.Running)).ToArray()) {
                             observations.Remove(key); RefreshRuleAlert(key.App);

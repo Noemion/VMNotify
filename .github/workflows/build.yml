@@ -45,9 +45,14 @@ jobs:
           }
           "publish=$($publish.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
   windows:
+    needs: agent
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bundled-agent-*
+          path: artifacts/bundled-agents
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
@@ -66,6 +71,13 @@ jobs:
       - name: Package all Windows architectures
         shell: pwsh
         run: ./scripts/package-windows.ps1 -Iscc "$env:RUNNER_TEMP\InnoSetup\tools\ISCC.exe"
+      - name: Verify bundled Linux binaries in every Windows publish directory
+        shell: pwsh
+        run: |
+          foreach ($publish in Get-ChildItem artifacts/publish -Directory) {
+            dotnet run --project windows/VMNotify.Tests -c Release -- --bundle-files "$($publish.FullName)/linux-agent"
+            if ($LASTEXITCODE) { throw 'Bundled Linux verification failed' }
+          }
       - name: Verify install, upgrade, reinstall and downgrade confirmation
         shell: pwsh
         run: |
@@ -122,16 +134,10 @@ jobs:
           /usr/bin/python3 scripts/test-auto-discovery.py target/${{ matrix.target }}/release/vmnotify-agent --icon-name
       - name: Verify independent application sampling intervals
         run: /usr/bin/python3 scripts/test-sampling-intervals.py target/${{ matrix.target }}/release/vmnotify-agent
-      - name: Package agent
-        run: |
-          mkdir -p artifacts
-          version=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "vmnotify-agent") | .version')
-          tar -czf "artifacts/VMNotify-$version-${{ matrix.target }}.tar.gz" -C target/${{ matrix.target }}/release vmnotify-agent
-          cd artifacts && sha256sum *.tar.gz > SHA256SUMS-${{ matrix.target }}.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: VMNotify-${{ matrix.target }}
-          path: artifacts/*
+          name: bundled-agent-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/vmnotify-agent
   release:
     needs: [release-plan, windows, agent]
     if: needs.release-plan.outputs.publish == 'true'
@@ -147,9 +153,8 @@ jobs:
           fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
-          pattern: VMNotify-*
+          name: VMNotify-windows
           path: release-assets
-          merge-multiple: true
       - name: Verify all release artifacts
         shell: bash
         env:
@@ -160,7 +165,11 @@ jobs:
           for arch in x86 x64 arm64; do
             test -s "VMNotify-$RELEASE_VERSION-win-$arch-setup.exe"
             test -s "VMNotify-$RELEASE_VERSION-win-$arch-portable.zip"
+            unzip -l "VMNotify-$RELEASE_VERSION-win-$arch-portable.zip" | grep 'linux-agent/x86_64/vmnotify-agent'
+            unzip -l "VMNotify-$RELEASE_VERSION-win-$arch-portable.zip" | grep 'linux-agent/aarch64/vmnotify-agent'
+            unzip -l "VMNotify-$RELEASE_VERSION-win-$arch-portable.zip" | grep 'linux-agent/manifest.json'
           done
+          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 7
           for sums in SHA256SUMS-*.txt; do sha256sum -c "$sums"; done
       - name: Publish complete release without replacing existing versions
         shell: bash

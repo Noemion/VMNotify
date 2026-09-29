@@ -34,21 +34,13 @@ Windows 客户端版本以 `windows/VERSION` 为准；“关于”页面显示�
 
 在“关于”点击“检查更新”，发现新版后点击“下载并升级”。下载及 SHA-256 校验完成后会自动打开升级向导并退出当前程序，无需从下载记录中再次选择安装包。下次启动（含静默启动）会自动清理更新缓存中的安装包、校验记录和未完成下载；被占用的文件会短暂重试，仍不能删除则留待下次启动处理。清理与新下载互斥，不删除程序、用户配置或无关文件。下载失败或取消安装后，可再次检查并下载升级。
 
-“关于”支持手动检查 GitHub 最新正式 Release、下载对应程序架构的安装包、启动安装向导和删除已下载文件。首次打开不会自动联网检查。下载保存于系统当前用户的 `%LOCALAPPDATA%\VMNotify\Updates`，退出后仍可管理。下载完成和启动安装前均校验 GitHub Release 提供的 SHA-256；这是完整性校验，不是代码签名。未发布 Release、缺少对应架构附件、网络错误均会显示具体提示。
+“关于”支持手动检查 GitHub 最新正式 Release。首次打开不会自动联网检查。下载缓存保存于系统当前用户的 `%LOCALAPPDATA%\VMNotify\Updates`，下次启动自动清理。下载完成和启动安装前均校验 GitHub Release 提供的 SHA-256；这是完整性校验，不是代码签名。未发布 Release、缺少对应架构附件、网络错误均会显示具体提示。
 
-发布 Windows 更新时，修改 `windows/VERSION`（递增的 `主.次.补丁` 稳定版本号）并更新 `CHANGELOG.md`，将提交推送或合并到 `main`。GitHub Actions 检测到版本变化后，自动运行测试，构建 Windows x86/x64/ARM64 安装版和便携版、Linux x64/ARM64 采集端，校验附件，再创建 `v版本号` Release。附件先上传至草稿，全部成功后才公开；应用内更新会识别对应架构的安装包。
+发布 Windows 更新时，修改 `windows/VERSION`（递增的 `主.次.补丁` 稳定版本号）并更新 `CHANGELOG.md`，将提交推送或合并到 `main`。GitHub Actions 先测试并构建 Linux x64/ARM64 采集端，再将两种架构打入每个 Windows x86/x64/ARM64 安装版和便携版。Release 只发布这六个 Windows 包和一个校验文件，不再单独发布 Linux 包。附件先上传至草稿，全部成功后才公开；应用内更新会识别对应架构的安装包。
 
 普通代码提交仍执行 CI，但不发布；PR 不发布。失败后可重跑工作流，或在 `main` 手动运行以补发当前版本。已公开的版本不会覆盖，同名标签指向不同提交时会停止；并发发布不会将较旧版本设为最新。发布使用仓库自带 `GITHUB_TOKEN`，无需配置个人令牌，仓库组织策略需允许发布任务使用 `contents: write`。Linux 代理版本取自 `agent/Cargo.toml`，可与 Windows 版本独立。
 
-1. 将对应 Linux 架构的 `vmnotify-agent` 安装到虚拟机桌面用户的 `~/.local/bin/`，并赋予执行权限：
-
-   ```sh
-   mkdir -p ~/.local/bin
-   chmod +x ~/.local/bin/vmnotify-agent
-   ~/.local/bin/vmnotify-agent --demo
-   ```
-
-   `--demo` 仅输出模拟协议事件；不验证真实消息。麒麟若禁止运行自编译二进制，请按所在环境的应用准入流程授权该文件，不要关闭系统防护。
+1. Linux 采集端已内置，无需单独下载。安装版将文件放在程序目录的 `linux-agent/`，便携版也包含此目录，请保留完整目录结构。连接时自动识别虚拟机 x64/ARM64 架构：不存在则安装，版本较旧则升级，相同或较新版本直接使用。传输前及远端落盘后校验 SHA-256，验证可执行文件版本后原子替换；传输或校验失败保留原文件。默认部署到桌面用户的 `~/.local/bin/vmnotify-agent`，无须 sudo；自定义路径需该用户有写入权限。麒麟若禁止运行该二进制，请按所在环境的应用准入流程授权。
 
 2. 在虚拟机上为桌面用户配置 SSH 公钥登录。Windows 设置 → 可选功能可安装 OpenSSH 客户端。密钥可以由 ssh-agent 管理，或在 VMNotify 中填写私钥路径；加密私钥请先载入 ssh-agent。无需提前在终端接受主机指纹，首次连接可直接在 VMNotify 弹窗中核对并授权。弹窗授权的是主机身份，仍需有效的登录密钥，不收集或保存 SSH 密码。
 
@@ -62,6 +54,10 @@ Windows 客户端版本以 `windows/VERSION` 为准；“关于”页面显示�
 安装版配置在 `%LOCALAPPDATA%\VMNotify\settings.json`；便携版通过 `portable.marker` 识别，配置保存在 EXE 旁。不要将个人设置或私钥打包发布。登录启动默认关闭，在“设置”勾选后点击“保存设置”才会设置。移动便携目录后应重新保存启动设置。
 
 ## 每个应用的通知规则
+
+应用管理显示实际连接的 Linux 采集端版本。连接后可点击“重新探测托盘图标”立即重建采集连接并刷新列表，应用选择和通知规则会保留；断开时按钮不可用。新版程序连接时会自动部署内置采集端，避免只更新宿主机后遗漏 aTrust 等应用。
+
+搜索框按应用名称或标识筛选，忽略大小写。点击应用的“忽略”后，从主列表隐藏并停止提醒；“已忽略的应用”入口可查看及搜索忽略项，应用不在线时仍可恢复显示。忽略记录自动保存，通知规则保留；恢复后需手动开启转发。
 
 在“应用管理”中点击应用旁边的“通知规则”。每个应用可选择一个通知条件，保存后即时生效，转发仍受应用开关控制：
 
@@ -119,13 +115,15 @@ cargo test --workspace --locked
 cargo fmt --all -- --check
 dotnet run --project windows/VMNotify.Tests -c Release
 dotnet build windows/VMNotify/VMNotify.csproj -c Release
-# 需要 Inno Setup 7.1；输出默认为 artifacts/
+# 需要 Inno Setup 7.1，并提前准备两个 Linux 架构文件（见下文）；输出默认为 artifacts/
 ./scripts/package-windows.ps1 -Iscc 'C:\path\to\ISCC.exe'
 # 修改图标绘制代码后，重新生成多分辨率 ICO 与预览 PNG
 dotnet run --project tools/VMNotify.IconBuilder -c Release -- windows/VMNotify/Assets
 ```
 
 Linux 本机可使用 `cargo build --release --locked`。Windows 上 Rust 的 `--demo` 和单元测试可运行，真实采集必须在 Linux 运行。
+
+本地打包前，把两个 musl 构建产物分别放到 `artifacts/bundled-agents/bundled-agent-x86_64-unknown-linux-musl/vmnotify-agent` 和 `artifacts/bundled-agents/bundled-agent-aarch64-unknown-linux-musl/vmnotify-agent`；也可通过 `-AgentDirectory` 指定包含这两个目录的父目录。打包缺少任一架构时会失败，不会生成缺失采集端的 Windows 包。CI 自动下载同次构建的两个采集端，生成版本及哈希清单，并验证全部便携包包含两种架构。
 
 GitHub Actions 构建两个 Linux 架构与六个 Windows 包并上传工作流 artifacts，在 main 分支版本变化时自动创建 Release。安装包暂未代码签名，首次运行可能出现 Windows 信誉提示。
 
