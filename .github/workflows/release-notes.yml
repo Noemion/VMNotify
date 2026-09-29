@@ -1,0 +1,40 @@
+name: Update published release notes
+on:
+  push:
+    branches: [main]
+    paths:
+      - CHANGELOG.md
+      - windows/VERSION
+      - scripts/release-notes.ps1
+      - scripts/test-release-notes.ps1
+      - .github/workflows/release-notes.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate and synchronize current release notes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./scripts/test-release-notes.ps1
+          ./scripts/release-notes.ps1 -OutputPath release-notes.md
+          $tag = 'v' + (Get-Content windows/VERSION -Raw).Trim()
+          $tags = gh api --paginate "repos/$env:GH_REPO/releases" --jq '.[].tag_name'
+          if ($LASTEXITCODE -ne 0) { throw 'Release lookup failed' }
+          if ($tag -notin @($tags)) {
+            Write-Host "Release $tag is not published yet; the build workflow will publish its notes."
+            exit 0
+          }
+          # Change only the body; retain the published tag, date and download assets.
+          gh release edit $tag --notes-file release-notes.md
+          if ($LASTEXITCODE -ne 0) { throw 'Release notes update failed' }
