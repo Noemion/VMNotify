@@ -27,6 +27,5 @@ $body
 - 已安装用户可在“关于 → 检查更新 → 下载并升级”中更新；旧版遇到 API 限流时，请从本发布页手动下载安装一次。
 - SHA256SUMS-windows.txt 提供下载完整性校验。
 
-[完整更新记录](https://github.com/Noemion/VMNotify/blob/v$version/CHANGELOG.md)
 "@
 [IO.File]::WriteAllText([IO.Path]::GetFullPath($OutputPath), $notes + "`n", [Text.UTF8Encoding]::new($false))
