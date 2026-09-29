@@ -257,7 +257,7 @@
                                 <TextBlock Text="生效日期" Margin="0,0,0,8"/>
                                 <RadioButton x:Name="EveryDayInput" Content="每天" Foreground="{DynamicResource MainText}" GroupName="ScheduleDays" IsChecked="True" Margin="0,0,0,8"/>
                                 <RadioButton x:Name="ChinaWorkdaysInput" Content="中国工作日（含调休上班，排除节假日和普通周末）" Foreground="{DynamicResource MainText}" GroupName="ScheduleDays"/>
-                                <TextBlock Text="内置 2025–2026 年放假调休安排；其他年份需更新日历数据。跨午夜时段按开始日期判断。" Style="{StaticResource Secondary}" Margin="0,8,0,0"/>
+                                <TextBlock Text="放假调休安排可在下方更新；跨午夜时段按开始日期判断。" Style="{StaticResource Secondary}" Margin="0,8,0,0"/>
                             </StackPanel>
                             <WrapPanel Margin="0,14,0,0" IsEnabled="{Binding IsChecked, ElementName=ScheduleInput}">
                                 <TextBlock Text="连接时间" VerticalAlignment="Center" Margin="0,0,10,0"/><TextBox x:Name="ConnectTimeInput" Width="85" MaxLength="5" AutomationProperties.Name="连接时间 HH:mm"/>
@@ -265,6 +265,26 @@
                             </WrapPanel>
                             <TextBlock Text="时间格式 HH:mm；修改后点击右下角“保存设置”。手动断开后，本时段不再自动连接。" Style="{StaticResource Secondary}" Margin="0,10,0,0"/>
                             <TextBlock x:Name="ScheduleStatusText" Style="{StaticResource Secondary}"/>
+                        </StackPanel></Border>
+                        <Border x:Name="CalendarCard" Style="{StaticResource Card}"><StackPanel>
+                            <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,16,0" VerticalAlignment="Center"><TextBlock Text="节假日日历" FontWeight="SemiBold"/><TextBlock x:Name="CalendarCoverageText" Style="{StaticResource Secondary}"/></StackPanel>
+                                <Button x:Name="UpdateCalendarButton" Grid.Column="1" Content="立即更新" Click="UpdateCalendarClicked"/>
+                            </Grid>
+                            <TextBlock Text="来源：holiday-cn（根据国务院公告整理）。更新当年和次年安排，保存后可离线使用。" Style="{StaticResource Secondary}" Margin="0,10,0,14"/>
+                            <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="每月自动更新" VerticalAlignment="Center"/>
+                                <CheckBox x:Name="CalendarAutoInput" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="每月自动更新节假日日历"/>
+                            </Grid>
+                            <WrapPanel Margin="0,12,0,0" IsEnabled="{Binding IsChecked, ElementName=CalendarAutoInput}">
+                                <TextBlock Text="每月" VerticalAlignment="Center" Margin="0,0,10,0"/><TextBox x:Name="CalendarDayInput" Width="55" MaxLength="2" AutomationProperties.Name="每月更新日期 1 至 31"/>
+                                <TextBlock Text="日" VerticalAlignment="Center" Margin="10,0,22,0"/>
+                                <TextBlock Text="开始时间" VerticalAlignment="Center" Margin="0,0,10,0"/><TextBox x:Name="CalendarTimeInput" Width="85" MaxLength="5" AutomationProperties.Name="日历更新开始时间 HH:mm"/>
+                            </WrapPanel>
+                            <TextBlock Text="按本机时间执行；不足所选日期的月份在月末更新。当日失败每小时重试，成功后停止。程序需在托盘运行，修改后点击“保存设置”。" Style="{StaticResource Secondary}" Margin="0,10,0,10"/>
+                            <TextBlock x:Name="CalendarResultText" Style="{StaticResource Secondary}" AutomationProperties.LiveSetting="Polite"/>
+                            <TextBlock x:Name="CalendarHistoryText" Style="{StaticResource Secondary}"/>
+                            <TextBlock x:Name="CalendarNextText" Style="{StaticResource Secondary}"/>
                         </StackPanel></Border>
                     </StackPanel>
 

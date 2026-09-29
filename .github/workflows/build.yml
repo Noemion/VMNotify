@@ -84,7 +84,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Test protocol and SSH arguments
+      - name: Test Windows behavior, calendar updates and SSH arguments
         run: dotnet run --project windows/VMNotify.Tests -c Release
       - name: Validate themes, layout and overlay scrollbar
         shell: pwsh

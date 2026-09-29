@@ -1,5 +1,10 @@
 using VMNotify;
 
+if (args.Length == 1 && args[0] == "--calendar-web") {
+    await CalendarUpdateTests.Live();
+    return;
+}
+
 if (args.Length == 1 && args[0] == "--update-web") {
     await UpdateTests.Live();
     return;
@@ -188,6 +193,7 @@ await UpdateTests.Run();
 TimingTests.Run();
 RuleTests.Run();
 CalendarTests.Run();
+await CalendarUpdateTests.Run();
 SshAuthorizationTests.Run();
 DiscoveryTests.Run();
 await BundleTests.Run();

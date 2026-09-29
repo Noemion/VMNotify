@@ -19,6 +19,9 @@ public sealed record Settings
     public ScheduleDays ScheduleDays { get; init; } = ScheduleDays.EveryDay;
     public string ConnectTime { get; init; } = "09:00";
     public string DisconnectTime { get; init; } = "18:00";
+    public bool CalendarAutoUpdate { get; init; }
+    public int CalendarUpdateDay { get; init; } = 1;
+    public string CalendarUpdateTime { get; init; } = "09:00";
 
     public void Validate()
     {
@@ -26,6 +29,7 @@ public sealed record Settings
         foreach (var rule in Rules.Values) { if (rule == null) throw new ArgumentException("通知规则不能为空。"); rule.Validate(); }
         if (!Enum.IsDefined(ScheduleDays)) throw new ArgumentException("无效的定时连接生效日期模式。");
         if (ScheduleEnabled) _ = DailySchedule.Parse(ConnectTime, DisconnectTime);
+        CalendarUpdateSchedule.Validate(CalendarUpdateDay, CalendarUpdateTime);
         if (!Regex.IsMatch(Host, @"\A[a-zA-Z0-9][a-zA-Z0-9.:%_-]{0,252}\z") || Host.Contains('\n'))
             throw new ArgumentException("主机填写 IP 或主机名，不包含用户名或空格");
         if (!Regex.IsMatch(User, @"\A[a-zA-Z_][a-zA-Z0-9_.-]{0,63}\z")) throw new ArgumentException("无效的 SSH 用户名");

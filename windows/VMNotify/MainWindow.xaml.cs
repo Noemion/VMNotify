@@ -107,6 +107,7 @@ public partial class MainWindow : Window
         ChinaWorkdaysInput.IsChecked = saved.ScheduleDays == ScheduleDays.ChinaWorkdays;
         ConnectTimeInput.Text = saved.ConnectTime;
         DisconnectTimeInput.Text = saved.DisconnectTime;
+        InitializeCalendar();
         saved = saved with { Rules = saved.Rules ?? new(), IgnoredApps = saved.IgnoredApps ?? new() };
         saved = saved with { EnabledApps = saved.EnabledApps.Where(id => !saved.IgnoredApps.ContainsKey(id)).ToArray() };
         try { receiver.SetRules(saved.Rules); }
@@ -139,6 +140,7 @@ public partial class MainWindow : Window
         Loaded += async (_, _) => await StartBackground();
         Closing += (_, e) => { if (!quitting) { e.Cancel = true; Hide(); } };
         Closed += (_, _) => {
+            calendarTimer.Stop(); calendarLifetime.Cancel(); calendarClient.Dispose();
             updateLifetime.Cancel(); updateClient.Dispose();
             timer.Stop(); scrollIdle.Stop(); cancellation?.Cancel(); tray.Dispose(); trayIcon.Dispose();
             desktopNotifications?.Dispose();
@@ -322,8 +324,12 @@ public partial class MainWindow : Window
         try {
             var cfg = saved with { AutoConnect = AutoConnectInput.IsChecked == true, SilentStartup = SilentStartupInput.IsChecked == true,
                 ScheduleEnabled = ScheduleInput.IsChecked == true, ScheduleDays = ChinaWorkdaysInput.IsChecked == true ? ScheduleDays.ChinaWorkdays : ScheduleDays.EveryDay,
-                ConnectTime = ConnectTimeInput.Text.Trim(), DisconnectTime = DisconnectTimeInput.Text.Trim() };
+                ConnectTime = ConnectTimeInput.Text.Trim(), DisconnectTime = DisconnectTimeInput.Text.Trim(),
+                CalendarAutoUpdate = CalendarAutoInput.IsChecked == true,
+                CalendarUpdateDay = int.TryParse(CalendarDayInput.Text.Trim(), out var calendarDay) ? calendarDay : 0,
+                CalendarUpdateTime = CalendarTimeInput.Text.Trim() };
             if (cfg.ScheduleEnabled) _ = DailySchedule.Parse(cfg.ConnectTime, cfg.DisconnectTime);
+            CalendarUpdateSchedule.Validate(cfg.CalendarUpdateDay, cfg.CalendarUpdateTime);
             var previous = saved;
             saved = cfg;
             try { SaveSettings(); } catch { saved = previous; throw; }
@@ -339,6 +345,7 @@ public partial class MainWindow : Window
         finally { busy = false; SaveGeneral.IsEnabled = true; }
         if (saved.Host.Length > 0) await EvaluateSchedule();
         RefreshStatus();
+        RefreshCalendarStatus();
     }
 
     private string ScheduleDaysLabel => saved.ScheduleDays == ScheduleDays.ChinaWorkdays ? "中国工作日" : "每天";
@@ -490,8 +497,23 @@ public partial class MainWindow : Window
                 }
                 if (i == 4) {
                     ScheduleInput.IsChecked = true;
-                    PageScroll.ScrollToEnd(); UpdateLayout(); await Task.Delay(150); HideScrollbarImmediately();
+                    ScheduleInput.BringIntoView(); UpdateLayout(); await Task.Delay(150); HideScrollbarImmediately();
                     Capture("schedule" + (light ? "-light" : "-dark"));
+                    var beforeCalendarPreview = saved;
+                    saved = saved with { CalendarAutoUpdate = true };
+                    CalendarAutoInput.IsChecked = true;
+                    RefreshCalendarStatus();
+                    foreach (var calendarWidth in new[] { 1024d, 900d }) {
+                        Width = calendarWidth; UpdateLayout(); PageScroll.ScrollToEnd(); UpdateLayout();
+                        await Task.Delay(150); HideScrollbarImmediately();
+                        double Right(FrameworkElement element) => element.TranslatePoint(new System.Windows.Point(element.ActualWidth, 0), Root).X;
+                        if (Right(UpdateCalendarButton) > Right(CalendarCard) - 10 || Right(CalendarTimeInput) > Right(CalendarCard) - 10
+                            || CalendarResultText.ActualHeight < 1 || CalendarNextText.TranslatePoint(new System.Windows.Point(0, CalendarNextText.ActualHeight), Root).Y > SettingsFooter.TranslatePoint(new System.Windows.Point(), Root).Y)
+                            throw new InvalidOperationException("Calendar actions and status must fit at minimum width and remain reachable above the footer");
+                        Capture($"calendar-{calendarWidth}" + (light ? "-light" : "-dark"));
+                    }
+                    saved = beforeCalendarPreview; CalendarAutoInput.IsChecked = saved.CalendarAutoUpdate;
+                    RefreshCalendarStatus(); Width = 1024; UpdateLayout();
                     ScheduleInput.IsChecked = false;
                 }
             }
@@ -532,7 +554,7 @@ public partial class MainWindow : Window
         Click(CloseButton); await Task.Delay(150);
         if (IsVisible) throw new InvalidOperationException("Close button did not hide window to tray");
         Show();
-        File.WriteAllText(Path.Combine(directory, "ui-checks.txt"), "PASS: light/dark palettes, page rendering, hidden idle scrollbar, visible while scrolling, fade after idle, no layout shift, caption drag hit test, edge resize hit test, maximize/restore/minimize/close buttons.");
+        File.WriteAllText(Path.Combine(directory, "ui-checks.txt"), "PASS: light/dark palettes, page rendering, calendar actions/status at 1024px and 900px, hidden idle scrollbar, visible while scrolling, fade after idle, no layout shift, caption drag hit test, edge resize hit test, maximize/restore/minimize/close buttons.");
     }
     internal void QuitForPreview() { quitting = true; Close(); }
 }

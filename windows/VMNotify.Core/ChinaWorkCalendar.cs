@@ -4,6 +4,12 @@ public enum ScheduleDays { EveryDay, ChinaWorkdays }
 
 public static class ChinaWorkCalendar
 {
+    private static IReadOnlyDictionary<int, CalendarYear> downloaded = new Dictionary<int, CalendarYear>();
+    public static int[] SupportedYears => Years.Keys.Concat(Volatile.Read(ref downloaded).Keys).Distinct().Order().ToArray();
+
+    // Publish a complete validated snapshot; scheduling never sees a half-applied update.
+    public static void UseDownloaded(IReadOnlyDictionary<int, CalendarYear> documents) =>
+        Volatile.Write(ref downloaded, new Dictionary<int, CalendarYear>(documents));
     // State Council annual notices; see docs/china-work-calendar.md for sources.
     private static readonly Dictionary<int, (HashSet<DateOnly> Holidays, HashSet<DateOnly> Workdays)> Years = new() {
         [2025] = (Ranges(2025, "01-01/01-01", "01-28/02-04", "04-04/04-06", "05-01/05-05", "05-31/06-02", "10-01/10-08"),
@@ -29,8 +35,14 @@ public static class ChinaWorkCalendar
 
     public static bool IsWorkday(DateOnly date)
     {
-        if (!Years.TryGetValue(date.Year, out var year))
-            throw new InvalidOperationException($"缺少 {date.Year} 年中国节假日数据，请更新 VMNotify 或改用每天模式。");
+        var snapshot = Volatile.Read(ref downloaded);
+        bool builtIn = Years.TryGetValue(date.Year, out var year);
+        if (!builtIn && !snapshot.ContainsKey(date.Year))
+            throw new InvalidOperationException($"缺少 {date.Year} 年中国节假日数据，请在设置中更新节假日日历或改用每天模式。");
+        // A following year's notice may also change the preceding December.
+        if (snapshot.TryGetValue(date.Year + 1, out var following) && following.Days.TryGetValue(date, out var nextOff)) return !nextOff;
+        if (snapshot.TryGetValue(date.Year, out var current))
+            return current.Days.TryGetValue(date, out var off) ? !off : date.DayOfWeek is not DayOfWeek.Saturday and not DayOfWeek.Sunday;
         if (year.Workdays.Contains(date)) return true;
         if (year.Holidays.Contains(date)) return false;
         return date.DayOfWeek is not DayOfWeek.Saturday and not DayOfWeek.Sunday;
