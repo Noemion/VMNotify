@@ -280,7 +280,7 @@
                         <Grid Margin="0,0,0,10">
                             <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <TextBlock x:Name="AppListHeading" Text="可转发的应用" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                            <Button x:Name="RediscoverButton" Grid.Column="1" Content="重新探测托盘图标" Click="RediscoverClicked" IsEnabled="False"/>
+                            <Button x:Name="RediscoverButton" Grid.Column="1" Content="重新探测托盘图标" MinWidth="220" Click="RediscoverClicked" IsEnabled="False"/>
                         </Grid>
                         <TextBlock x:Name="RediscoverStatus" Style="{StaticResource Secondary}" Margin="0,0,0,10" Visibility="Collapsed"/>
                         <Grid Margin="0,0,0,14">
