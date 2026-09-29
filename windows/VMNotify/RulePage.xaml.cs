@@ -94,7 +94,8 @@ public partial class RulePage : System.Windows.Controls.UserControl
             ImageBackdrop.Background = TrayImages.Backdrop(displayedPreview);
         }
         MissingImage.Visibility = LiveImage.Source == null ? Visibility.Visible : Visibility.Collapsed;
-        LiveName.Text = icon?.IconName ?? "（未提供图标名称）";
+        LiveName.Text = icon == null ? "尚未获取托盘数据" : string.IsNullOrEmpty(icon.IconName)
+            ? "此应用未提供图标名称，可直接选择图标设置通知" : icon.IconName;
         LiveStatus.Text = icon == null ? "暂无实时数据。请连接虚拟机并运行应用；旧版 Linux 采集端需要更新。"
             : $"颜色：{(icon.Colorful is bool c ? c ? "彩色" : "灰色" : "无法判断")}  ·  闪烁：{Flag(icon.Flashing)}  ·  需要关注：{Flag(icon.Attention)}";
         if (!displayedColors.SequenceEqual(icon?.Colors ?? [])) {
