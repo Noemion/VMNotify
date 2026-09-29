@@ -1,11 +1,29 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using VMNotify;
 
 internal static class UpdateTests
 {
+    public static async Task Live()
+    {
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+        var folder = Path.Combine(Path.GetTempPath(), "VMNotify-web-update-" + Guid.NewGuid().ToString("N"));
+        var updates = new Updates(client, folder);
+        foreach (var architecture in new[] { "x86", "x64", "arm64" }) {
+            var release = await updates.Check("0.0.0", architecture, default) ?? throw new Exception("Missing live release");
+            Console.WriteLine($"PASS: public web release {release.Version}, {architecture}, {release.Size} bytes");
+            Check(await updates.Check(release.Version, architecture, default) == null);
+            if (architecture == "x64") {
+                try {
+                    var downloaded = await updates.Download(release, new Progress<int>(), default);
+                    _ = await updates.Verify(downloaded, default);
+                    updates.Delete(downloaded);
+                    Console.WriteLine("PASS: public installer download and SHA-256 verification (not executed)");
+                } finally { if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any()) Directory.Delete(folder); }
+            }
+        }
+    }
     private sealed class Handler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token) => Task.FromResult(respond(request));
@@ -15,24 +33,41 @@ internal static class UpdateTests
     {
         byte[] content = Encoding.UTF8.GetBytes("installer test payload");
         string hash = Convert.ToHexString(SHA256.HashData(content));
-        string Json(string name, string digest, string url = "https://github.com/Noemion/VMNotify/releases/download/v0.2.0/installer.exe") => JsonSerializer.Serialize(new
-        {
-            tag_name = "v0.2.0", draft = false, prerelease = false,
-            assets = new[] { new { name, digest, size = content.Length, browser_download_url = url } }
-        });
         string name = "VMNotify-0.2.0-win-x64-setup.exe";
-        string json = Json(name, "sha256:" + hash);
-        var release = Updates.ParseRelease(json, "0.1.1", "x64")!;
-        Check(release.FileName == name);
-        Check(Updates.ParseRelease(json, "0.2.0", "x64") == null);
-        Check(Updates.ParseRelease(json, "0.3.0", "x64") == null);
-        foreach (var invalid in new[] { Json(name, ""), Json(name, "sha256:" + hash, "https://example.com/installer.exe"), Json("../bad.exe", "sha256:" + hash) })
         {
-            bool rejected = false;
-            try { Updates.ParseRelease(invalid, "0.1.1", "x64"); } catch (InvalidDataException) { rejected = true; }
-            Check(rejected);
-
+            int calls = 0;
+            using var fallbackClient = new HttpClient(new Handler(request => {
+                calls++;
+                Check(request.RequestUri!.Host == "github.com" && request.Headers.Authorization == null);
+                if (request.RequestUri.AbsolutePath.EndsWith("/releases/latest")) return new(HttpStatusCode.OK) {
+                    RequestMessage = new(HttpMethod.Get, Updates.RepositoryUrl + "/releases/tag/v0.2.0"), Content = new StringContent("") };
+                if (request.RequestUri.AbsolutePath.EndsWith("SHA256SUMS-windows.txt")) return new(HttpStatusCode.OK) { Content = new StringContent(hash + "  " + name + "\r\n") };
+                Check(request.Method == HttpMethod.Head && request.RequestUri.AbsolutePath.EndsWith(name));
+                return new(HttpStatusCode.OK) { Content = new ByteArrayContent(content) };
+            }));
+            var fallback = new Updates(fallbackClient, "unused");
+            var found = await fallback.Check("0.1.1", "x64", default);
+            Check(found?.Sha256 == hash && found.Size == content.Length && calls == 3);
+            calls = 0;
+            Check(await fallback.Check("0.2.0", "x64", default) == null && calls == 1);
         }
+        foreach (var broken in new[] { "foreign", "prerelease", "missing-hash", "duplicate-hash", "missing-size", "oversized" }) {
+            using var badClient = new HttpClient(new Handler(request => {
+                Check(request.RequestUri!.Host == "github.com");
+                if (request.RequestUri.AbsolutePath.EndsWith("/releases/latest")) return new(HttpStatusCode.OK) {
+                    RequestMessage = new(HttpMethod.Get, broken == "foreign" ? "https://example.com/Noemion/VMNotify/releases/tag/v0.2.0"
+                        : Updates.RepositoryUrl + "/releases/tag/v0.2.0" + (broken == "prerelease" ? "-beta" : "")), Content = new StringContent("") };
+                if (request.RequestUri.AbsolutePath.EndsWith("SHA256SUMS-windows.txt")) return new(HttpStatusCode.OK) {
+                    Content = new StringContent(broken == "oversized" ? new string('x', 65537) : broken == "missing-hash" ? ""
+                        : hash + "  " + name + "\n" + (broken == "duplicate-hash" ? hash + "  " + name + "\n" : "")) };
+                return new(HttpStatusCode.OK) { Content = new ByteArrayContent([]) };
+            }));
+            bool failed = false;
+            try { await new Updates(badClient, "unused").Check("0.1.1", "x64", default); }
+            catch (Exception ex) when (ex is InvalidDataException or HttpRequestException) { failed = true; }
+            Check(failed);
+        }
+        var release = new ReleaseUpdate("0.2.0", name, Updates.RepositoryUrl + "/releases/download/v0.2.0/" + name, hash, content.Length);
         string folder = Path.Combine(Path.GetTempPath(), "VMNotify-update-test-" + Guid.NewGuid().ToString("N"));
         using var client = new HttpClient(new Handler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(content) }));
         var service = new Updates(client, folder);

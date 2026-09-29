@@ -11,7 +11,7 @@ public sealed record DownloadedUpdate(string Version, string FileName, string Sh
 public sealed class Updates(HttpClient client, string directory)
 {
     public const string RepositoryUrl = "https://github.com/Noemion/VMNotify";
-    public const string LatestUrl = "https://api.github.com/repos/Noemion/VMNotify/releases/latest";
+    public const string LatestUrl = "https://github.com/Noemion/VMNotify/releases/latest";
     private const long MaximumSize = 512L * 1024 * 1024;
     private static readonly Regex FilePattern = new(@"\AVMNotify-\d+\.\d+\.\d+-win-(x86|x64|arm64)-setup\.exe\z");
     public static Version ParseVersion(string text)
@@ -21,42 +21,35 @@ public sealed class Updates(HttpClient client, string directory)
         return Version.Parse(text);
     }
 
-    public static ReleaseUpdate? ParseRelease(string json, string currentVersion, string architecture)
-    {
-        if (architecture is not ("x86" or "x64" or "arm64")) throw new ArgumentException("不支持的架构");
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-        if (root.GetProperty("draft").GetBoolean() || root.GetProperty("prerelease").GetBoolean()) return null;
-        var version = ParseVersion(root.GetProperty("tag_name").GetString()!);
-        if (version <= ParseVersion(currentVersion)) return null;
-        string name = $"VMNotify-{version}-win-{architecture}-setup.exe";
-        foreach (var asset in root.GetProperty("assets").EnumerateArray())
-        {
-            if (asset.GetProperty("name").GetString() != name) continue;
-            var url = asset.GetProperty("browser_download_url").GetString()!;
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != "https" || uri.Host != "github.com"
-                || !uri.AbsolutePath.StartsWith("/Noemion/VMNotify/releases/download/", StringComparison.Ordinal)
-                || uri.UserInfo.Length != 0) throw new InvalidDataException("安装包下载来源无效。");
-            string digest = asset.TryGetProperty("digest", out var value) ? value.GetString() ?? "" : "";
-            if (!Regex.IsMatch(digest, @"\Asha256:[a-fA-F0-9]{64}\z")) throw new InvalidDataException("发布包缺少 SHA-256 校验信息，请在 GitHub 查看发布详情。");
-            long size = asset.GetProperty("size").GetInt64();
-            if (size <= 0 || size > MaximumSize) throw new InvalidDataException("安装包大小无效。");
-            return new(version.ToString(), name, url, digest[7..], size);
-        }
-        throw new InvalidDataException($"发现版本 {version}，但尚未上传 {architecture} 安装包。");
-    }
-
     public async Task<ReleaseUpdate?> Check(string currentVersion, string architecture, CancellationToken token)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, LatestUrl);
-        request.Headers.UserAgent.ParseAdd("VMNotify/" + currentVersion.Split('+')[0]);
-        request.Headers.Accept.ParseAdd("application/vnd.github+json");
-        using var response = await client.SendAsync(request, token);
-        if (response.StatusCode == HttpStatusCode.NotFound) throw new InvalidDataException("仓库暂无可访问的正式发布版本。");
-        if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests)
-            throw new HttpRequestException("GitHub 暂时限制请求，请稍后重试。");
-        response.EnsureSuccessStatusCode();
-        return ParseRelease(await response.Content.ReadAsStringAsync(token), currentVersion, architecture);
+        if (architecture is not ("x86" or "x64" or "arm64")) throw new ArgumentException("不支持的架构");
+        // GitHub's public latest redirect is independent of the REST API quota and excludes prereleases.
+        using var latestRequest = new HttpRequestMessage(HttpMethod.Get, LatestUrl);
+        latestRequest.Headers.UserAgent.ParseAdd("VMNotify");
+        using var latest = await client.SendAsync(latestRequest, HttpCompletionOption.ResponseHeadersRead, token);
+        if (latest.StatusCode == HttpStatusCode.NotFound) throw new InvalidDataException("仓库暂无可访问的正式发布版本。");
+        latest.EnsureSuccessStatusCode();
+        var uri = latest.RequestMessage?.RequestUri;
+        var tag = uri == null ? Match.Empty : Regex.Match(uri.AbsolutePath, @"\A/Noemion/VMNotify/releases/tag/v(\d+\.\d+\.\d+)\z");
+        if (uri?.Scheme != "https" || uri.Host != "github.com" || uri.UserInfo.Length != 0 || !uri.IsDefaultPort || !tag.Success)
+            throw new InvalidDataException("无法确认 GitHub 正式发布版本，请打开发布页面下载。");
+        var version = ParseVersion(tag.Groups[1].Value);
+        if (version <= ParseVersion(currentVersion)) return null;
+        string name = $"VMNotify-{version}-win-{architecture}-setup.exe";
+        string baseUrl = RepositoryUrl + "/releases/download/v" + version + "/";
+        using var checksumResponse = await client.GetAsync(baseUrl + "SHA256SUMS-windows.txt", HttpCompletionOption.ResponseHeadersRead, token);
+        checksumResponse.EnsureSuccessStatusCode();
+        await checksumResponse.Content.LoadIntoBufferAsync(65536, token);
+        var checksums = await checksumResponse.Content.ReadAsStringAsync(token);
+        var hashes = Regex.Matches(checksums, @"(?m)^([a-fA-F0-9]{64}) [ *]" + Regex.Escape(name) + @"\r?$");
+        if (hashes.Count != 1) throw new InvalidDataException("发布包缺少唯一的 SHA-256 校验信息。");
+        using var sizeRequest = new HttpRequestMessage(HttpMethod.Head, baseUrl + name);
+        using var sizeResponse = await client.SendAsync(sizeRequest, HttpCompletionOption.ResponseHeadersRead, token);
+        sizeResponse.EnsureSuccessStatusCode();
+        long size = sizeResponse.Content.Headers.ContentLength ?? 0;
+        if (size <= 0 || size > MaximumSize) throw new InvalidDataException("安装包大小无效。");
+        return new(version.ToString(), name, baseUrl + name, hashes[0].Groups[1].Value, size);
     }
 
     private string LocalPath(string name)

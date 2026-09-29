@@ -1,5 +1,10 @@
 using VMNotify;
 
+if (args.Length == 1 && args[0] == "--update-web") {
+    await UpdateTests.Live();
+    return;
+}
+
 if (args.Length == 2 && args[0] == "--bundle-files") {
     await BundleTests.VerifyFiles(args[1]);
     return;
