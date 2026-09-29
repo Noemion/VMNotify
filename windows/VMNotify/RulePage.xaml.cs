@@ -16,11 +16,11 @@ public partial class RulePage : System.Windows.Controls.UserControl
     private IconObservation[] icons = [];
     private string[] displayedColors = [];
     private bool initialized;
-    private sealed record InstanceChoice(string Id, string Label);
+    private sealed record InstanceChoice(string Id, string Label) { public override string ToString() => Label; }
     internal event Action<NotificationRule?>? SaveRequested;
     internal event Action? BackRequested;
     private TrayImage? displayedPreview;
-    private sealed record ConditionChoice(RuleCondition Value, string Label);
+    private sealed record ConditionChoice(RuleCondition Value, string Label) { public override string ToString() => Label; }
     private RuleCondition Condition => ConditionInput.SelectedValue is RuleCondition value ? value : RuleCondition.Default;
     private IconObservation? Current => icons.FirstOrDefault(i => i.InstanceId == InstanceInput.SelectedValue as string);
     internal RulePage(string name, NotificationRule? rule, Func<IconObservation[]> readIcons, Func<RecordedIcon[]> readHistory)

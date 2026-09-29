@@ -79,6 +79,9 @@ public partial class MainWindow
                 throw new InvalidOperationException("Clicking a discovered image must select it as notification target");
             foreach (var condition in new[] { RuleCondition.Grayscale, RuleCondition.NameDiffers, RuleCondition.Color, RuleCondition.IconDiffers }) {
                 page.ConditionInput.SelectedValue = condition;
+                if (page.ConditionInput.SelectedItem?.ToString() != new NotificationRule { Condition = condition }.Description
+                    + (condition is RuleCondition.Grayscale or RuleCondition.Colorful ? "（旧版规则）" : ""))
+                    throw new InvalidOperationException("Collapsed condition must display its label, not object metadata");
                 if (condition == RuleCondition.NameDiffers) page.TargetInput.Text = "atrust-connected";
                 if (condition is RuleCondition.Color or RuleCondition.IconDiffers)
                     page.RecordButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
