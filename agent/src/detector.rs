@@ -2,12 +2,29 @@ use std::time::{Duration, Instant};
 
 /// NewIcon can be emitted for identical pixels even when flashing has stopped.
 #[derive(Default)]
-pub struct IconChanges(Option<u64>);
+pub struct IconChanges {
+    previous: Option<u64>,
+    frames: [Option<u64>; 4],
+    cursor: usize,
+    last_change: Option<Instant>,
+}
 impl IconChanges {
-    pub fn changed(&mut self, fingerprint: u64) -> bool {
-        let changed = self.0.is_some_and(|previous| previous != fingerprint);
-        self.0 = Some(fingerprint);
-        changed
+    pub fn repeated_change(&mut self, fingerprint: u64, now: Instant) -> bool {
+        if self
+            .last_change
+            .is_some_and(|t| now.duration_since(t) >= Duration::from_millis(1250))
+        {
+            *self = Self::default();
+        }
+        if self.previous == Some(fingerprint) {
+            return false;
+        }
+        let repeated = self.previous.is_some() && self.frames.contains(&Some(fingerprint));
+        self.previous = Some(fingerprint);
+        self.frames[self.cursor] = Some(fingerprint);
+        self.cursor = (self.cursor + 1) % self.frames.len();
+        self.last_change = Some(now);
+        repeated
     }
 }
 
@@ -77,7 +94,7 @@ mod tests {
             if detector.tick(now) {
                 cleared += 1;
             }
-            if icon.changed(pixels) && detector.pulse(now) {
+            if icon.repeated_change(pixels, now) && detector.pulse(now) {
                 attention += 1;
             }
         }
@@ -88,7 +105,7 @@ mod tests {
     fn static_icon_signals_never_start_attention() {
         let mut icon = IconChanges::default();
         for _ in 0..100 {
-            assert!(!icon.changed(123));
+            assert!(!icon.repeated_change(123, Instant::now()));
         }
     }
     #[test]
@@ -116,6 +133,19 @@ mod tests {
         }
         for i in 1..10 {
             assert!(!d.pulse(start + Duration::from_secs(i * 4)));
+        }
+    }
+    #[test]
+    fn transient_cycle_and_unique_changes_are_not_sustained_flashing() {
+        for frames in [vec![0, 1, 0, 0, 0, 0], vec![0, 1, 2, 3, 4, 5]] {
+            let mut icon = IconChanges::default();
+            let mut detector = Detector::default();
+            let start = Instant::now();
+            for (i, frame) in frames.into_iter().enumerate() {
+                let now = start + Duration::from_millis(i as u64 * 250);
+                detector.tick(now);
+                assert!(!(icon.repeated_change(frame, now) && detector.pulse(now)));
+            }
         }
     }
 }

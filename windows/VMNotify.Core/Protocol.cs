@@ -67,7 +67,12 @@ public record AgentEvent(string Kind, string? AppId, string? AppName, AvailableA
                 || fingerprint?.Length > 128 || fingerprint?.Any(char.IsControl) == true
                 || iconName?.Length > 1024 || iconName?.Any(char.IsControl) == true
                 || colors.Length > 16 || colors.Any(c => !NotificationRule.IsColor(c))) throw new InvalidDataException("无效的图标信息");
-            icon = new(instance, fingerprint, iconName, Flag("colorful"), colors, Flag("flashing"), Flag("attention"), Flag("removed") == true);
+            TrayImage? preview = null;
+            if (item.TryGetProperty("preview", out var image) && image.ValueKind != JsonValueKind.Null) {
+                preview = new(image.GetProperty("width").GetInt32(), image.GetProperty("height").GetInt32(), image.GetProperty("argb_hex").GetString() ?? "");
+                preview.Validate();
+            }
+            icon = new(instance, fingerprint, iconName, Flag("colorful"), colors, Flag("flashing"), Flag("attention"), Flag("removed") == true, preview);
         }
         return new(kind, id, name, apps, icon);
     }

@@ -11,8 +11,8 @@ public partial class MainWindow
         RediscoverButton.Content = rediscovering ? "正在重新探测…" : "重新探测托盘图标";
         var version = receiver.AgentVersion;
         AgentVersionStatus.Visibility = version == null ? Visibility.Collapsed : Visibility.Visible;
-        AgentVersionStatus.Text = version == null ? "" : Version.Parse(version) < new Version(0, 1, 4)
-            ? $"Linux 采集端 {version} 较旧，可能缺少应用。请安装完整的新版 VMNotify，连接时会自动部署内置采集端。"
+        AgentVersionStatus.Text = version == null ? "" : Version.Parse(version) < new Version(0, 2, 0)
+            ? $"Linux 采集端 {version} 较旧，可能缺少托盘图像。请安装完整的新版 VMNotify，连接时会自动部署内置采集端。"
             : $"Linux 采集端 {version} · 未显示的应用可尝试重新探测。";
     }
 

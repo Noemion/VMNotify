@@ -2,6 +2,7 @@ mod adapters;
 mod detector;
 mod discovery;
 mod icon;
+mod theme_icon;
 use discovery::{discover, instance_key, property, variant_string, Instance};
 
 use adapters::{App, AttentionDetector, AvailableApp};
@@ -78,6 +79,8 @@ fn track(
     let _ = sample.try_send(());
     let app = instance.app.clone();
     let worker = tokio::spawn(async move {
+        let mut theme_cache = theme_icon::Cache::default();
+        let mut theme_path = None;
         while requests.recv().await.is_some() {
             let (pixels, name, status) = tokio::join!(
                 async {
@@ -112,15 +115,29 @@ fn track(
             let name = name
                 .and_then(|n| variant_string(&n))
                 .filter(|n| !n.is_empty());
-            let fingerprint = if pixels.is_some() || name.is_some() {
+            let mut features = icon::analyze(pixels.as_deref(), name.as_deref());
+            // Compare normalized visible pixels, not GVariant formatting or unused icon names.
+            let fingerprint = features.fingerprint.as_ref().map(|identity| {
                 let mut hash = std::collections::hash_map::DefaultHasher::new();
-                pixels.hash(&mut hash);
-                name.hash(&mut hash);
-                Some(hash.finish())
-            } else {
-                None
-            };
-            let features = icon::analyze(pixels.as_deref(), name.as_deref());
+                identity.hash(&mut hash);
+                hash.finish()
+            });
+            if features.preview.is_none() {
+                if let Some(name) = name.as_deref() {
+                    if theme_path.is_none() {
+                        theme_path = Some(
+                            property(&instance.owner, &instance.path, "IconThemePath")
+                                .await
+                                .ok()
+                                .and_then(|s| variant_string(&s))
+                                .unwrap_or_default(),
+                        );
+                    }
+                    features.preview = theme_cache
+                        .read(name, theme_path.as_deref().unwrap_or_default())
+                        .await;
+                }
+            }
             let status = status
                 .and_then(|s| variant_string(&s))
                 .and_then(|s| match s.as_str() {
@@ -479,7 +496,11 @@ async fn monitor(cfg: Config) -> Result<()> {
                 if let Some(entry) = tracked.get_mut(&sample.key) {
                     if entry.detector.tick(sample.at) { entry.flashing = false; }
                     if let Some(fingerprint) = sample.fingerprint {
-                        if entry.icon.changed(fingerprint) && entry.detector.pulse(sample.at) { entry.flashing = true; }
+                        if entry.icon.repeated_change(fingerprint, sample.at) && entry.detector.pulse(sample.at) { entry.flashing = true; }
+                    } else {
+                        entry.icon = detector::IconChanges::default();
+                        entry.detector = entry.app.detector();
+                        entry.flashing = false;
                     }
                     entry.status_active = sample.status.unwrap_or(false);
                     entry.active = entry.status_active || entry.flashing;

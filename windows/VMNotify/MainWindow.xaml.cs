@@ -14,7 +14,7 @@ using WpfMessageBox = System.Windows.MessageBox;
 
 namespace VMNotify;
 
-internal sealed class AppChoice
+internal sealed class AppChoice : System.ComponentModel.INotifyPropertyChanged
 {
     public required string Id { get; init; }
     public required string Name { get; init; }
@@ -23,6 +23,18 @@ internal sealed class AppChoice
     public bool Enabled { get; set; }
     public bool CanEnable { get; init; } = true;
     public string IgnoreAction { get; init; } = "忽略";
+    private TrayImage? preview;
+    public SolidColorBrush? IconBackground { get; private set; }
+    public ImageSource? TrayIcon { get; private set; }
+    public Visibility PlaceholderVisibility => TrayIcon == null ? Visibility.Visible : Visibility.Collapsed;
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+    public void UpdateImage(TrayImage? value) {
+        if (preview == value) return;
+        preview = value; TrayIcon = TrayImages.Create(value); IconBackground = TrayImages.Backdrop(value);
+        PropertyChanged?.Invoke(this, new(nameof(TrayIcon)));
+        PropertyChanged?.Invoke(this, new(nameof(PlaceholderVisibility)));
+        PropertyChanged?.Invoke(this, new(nameof(IconBackground)));
+    }
 }
 
 public partial class MainWindow : Window
@@ -40,6 +52,7 @@ public partial class MainWindow : Window
     private Settings saved = new();
     private HashSet<string> enabled = [];
     private AvailableApp[]? displayed;
+    private AgentEvent[] previewIconEvents = [];
     private CancellationTokenSource? cancellation;
     private Task running = Task.CompletedTask;
     private bool quitting, busy;
@@ -72,6 +85,7 @@ public partial class MainWindow : Window
         };
         bool portable = File.Exists(Path.Combine(AppContext.BaseDirectory, "portable.marker"));
         settingsFile = Path.Combine(portable ? AppContext.BaseDirectory : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VMNotify"), "settings.json");
+        if (!preview) try { iconHistory.Load(IconHistoryPath); } catch (Exception ex) { Diagnostics.Write("Icon history load failed: " + ex.Message); }
         using (var stream = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/Assets/VMNotify.ico")).Stream)
         using (var loadedIcon = new System.Drawing.Icon(stream, 32, 32)) trayIcon = (System.Drawing.Icon)loadedIcon.Clone();
         tray = new() { Icon = trayIcon, Text = "VMNotify", Visible = !preview };
@@ -111,11 +125,13 @@ public partial class MainWindow : Window
             RefreshStatus();
             receiver.QueueReminders();
             if (!ReferenceEquals(displayed, receiver.AvailableApps)) RenderApps(receiver.AvailableApps);
+            RefreshTrayImages();
+            CaptureIconHistory();
             if (receiver.Notifications.Reader.TryRead(out var ev)) {
                 if (receiver.ShouldDisplay(ev)) {
                     var message = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "zh"
-                        ? ev.Kind == "reminder" ? $"虚拟机【{saved.Host}】中的【{ev.AppName}】仍有待查看的消息。" : $"虚拟机【{saved.Host}】中的【{ev.AppName}】有新消息。"
-                        : ev.Kind == "reminder" ? $"Messages still need attention in [{ev.AppName}] on virtual machine [{saved.Host}]." : $"New message from [{ev.AppName}] on virtual machine [{saved.Host}].";
+                        ? ev.Kind == "reminder" ? $"虚拟机【{saved.Host}】中的【{ev.AppName}】仍符合托盘提醒条件。" : $"虚拟机【{saved.Host}】中的【{ev.AppName}】触发了托盘提醒。"
+                        : ev.Kind == "reminder" ? $"Tray attention remains active for [{ev.AppName}] on virtual machine [{saved.Host}]." : $"Tray attention from [{ev.AppName}] on virtual machine [{saved.Host}].";
                     if (ev.Message != null) message = $"虚拟机【{saved.Host}】中的【{ev.AppName}】：{ev.Message}";
                     LastNotification.Text = $"{message}  ·  {DateTime.Now:HH:mm}";
                     Diagnostics.Write("Notification dequeued: " + ev.AppId);
@@ -170,6 +186,9 @@ public partial class MainWindow : Window
     private void SelectPage(int index)
     {
         if (OverviewPage == null) return;
+        if (index != 5) RulesHost.Content = null;
+        RulesHost.Visibility = index == 5 ? Visibility.Visible : Visibility.Collapsed;
+        PageScroll.Visibility = index == 5 ? Visibility.Collapsed : Visibility.Visible;
         suppressScrollUntil = DateTime.UtcNow.AddMilliseconds(120);
         PageScroll.ScrollToTop();
         HideScrollbarImmediately();
@@ -180,11 +199,11 @@ public partial class MainWindow : Window
         SettingsPage.Visibility = index == 4 ? Visibility.Visible : Visibility.Collapsed;
         SettingsFooter.Visibility = index == 4 ? Visibility.Visible : Visibility.Collapsed;
         ConnectionFooter.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
-        PageTitle.Text = new[] { "概览", "虚拟机配置", "应用管理", "关于", "设置" }[index];
-        PageDescription.Text = new[] { "管理虚拟机连接与应用通知。", "设置与 Linux 虚拟机的连接方式。", "选择哪些应用可以在这台电脑上提醒你。", "版本与更新", "管理启动行为与定时连接。" }[index];
+        PageTitle.Text = new[] { "概览", "虚拟机配置", "应用管理", "关于", "设置", "应用管理 / 通知规则" }[index];
+        PageDescription.Text = new[] { "管理虚拟机连接与应用通知。", "设置与 Linux 虚拟机的连接方式。", "选择哪些应用可以在这台电脑上提醒你。", "版本与更新", "管理启动行为与定时连接。", "设置当前应用的提醒方式。" }[index];
         if (index == 0) OverviewNav.IsChecked = true;
         else if (index == 1) ConnectionNav.IsChecked = true;
-        else if (index == 2) AppsNav.IsChecked = true;
+        else if (index is 2 or 5) AppsNav.IsChecked = true;
         else if (index == 3) AboutNav.IsChecked = true; else SettingsNav.IsChecked = true;
     }
     private void OverviewClicked(object sender, RoutedEventArgs e) => SelectPage(0);
@@ -224,7 +243,17 @@ public partial class MainWindow : Window
         EmptyAppsDetail.Text = AppSearchInput.Text.Trim().Length > 0 ? "试试其他应用名称，或清空搜索。" : showingIgnored ? "忽略的应用会显示在这里，可随时恢复。" : "连接虚拟机并重新探测，或在“已忽略的应用”中恢复应用。";
         AppListHeading.Text = $"{(showingIgnored ? "已忽略的应用" : "可转发的应用")}（{filtered.Length}）";
         IgnoredAppsButton.Content = showingIgnored ? "返回应用列表" : $"已忽略的应用（{saved.IgnoredApps.Count}）";
+        RefreshTrayImages();
     }
+    private void RefreshTrayImages() {
+        foreach (var app in AppItems.Items.OfType<AppChoice>()) {
+            var icon = ReadTrayIcons(app.Id).Where(i => i.Preview != null).OrderBy(i => i.InstanceId, StringComparer.Ordinal).FirstOrDefault();
+            app.UpdateImage(icon?.Preview);
+        }
+    }
+    private IconObservation[] ReadTrayIcons(string id) => previewMode && previewIconEvents.Length > 0
+        ? previewIconEvents.Where(e => e.AppId == id && e.Icon != null).Select(e => e.Icon!).ToArray()
+        : !previewMode && activeIconScope != IconHistory.Scope(saved) ? [] : receiver.GetIcons(id);
     private void AppToggleClicked(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.CheckBox { DataContext: AppChoice app } checkbox) return;
@@ -273,7 +302,7 @@ public partial class MainWindow : Window
             pausedWindow = null; scheduleRetryAfter = DateTime.MinValue;
             if (!cfg.ScheduleEnabled) scheduleStatus = "";
             if (!cfg.ScheduleEnabled || DailySchedule.Parse(cfg.ConnectTime, cfg.DisconnectTime).WindowStart(DateTime.Now, saved.ScheduleDays) != null) {
-                cancellation = new(); running = receiver.Run(cfg, cancellation.Token);
+                activeIconScope = IconHistory.Scope(cfg); cancellation = new(); running = receiver.Run(cfg, cancellation.Token);
             } else scheduleStatus = $"等待{ScheduleDaysLabel} {cfg.ConnectTime} 自动连接（本机时间）";
             SelectPage(0);
         } catch (Exception ex) { WpfMessageBox.Show(this, ex.Message, "VMNotify", MessageBoxButton.OK, MessageBoxImage.Warning); }
@@ -321,7 +350,7 @@ public partial class MainWindow : Window
             if (window == null) { if (cancellation != null) await Stop(); return; }
             if (pausedWindow == window || cancellation != null || now < scheduleRetryAfter) return;
             saved.Validate(); Receiver.SshPath();
-            cancellation = new(); running = receiver.Run(saved, cancellation.Token);
+            activeIconScope = IconHistory.Scope(saved); cancellation = new(); running = receiver.Run(saved, cancellation.Token);
         } catch (Exception ex) {
             if (cancellation != null) await Stop();
             scheduleStatus = "定时连接配置有误：" + ex.Message;
@@ -330,7 +359,9 @@ public partial class MainWindow : Window
     }
     private async Task Stop()
     {
+        if (!previewMode) CaptureIconHistory();
         cancellation?.Cancel(); await running; cancellation?.Dispose(); cancellation = null;
+        if (!previewMode) { await iconSaveTask; if (iconHistory.Revision != savedIconRevision) await SaveIconHistory(); }
         while (receiver.Notifications.Reader.TryRead(out _)) { }
         RefreshStatus();
     }
@@ -382,8 +413,18 @@ public partial class MainWindow : Window
         // Preview data is illustrative, never saved or connected to a real machine.
         HostInput.Text = "192.0.2.10"; UserInput.Text = "desktop-user";
         await PreviewUpdateCleanup(directory);
-        RenderApps([new("lanxin", "蓝信", true, "status-notifier-flash", "attention-only", true),
-            new("auto-preview", "自动发现的应用", true, "status-notifier-auto", "attention-only")]);
+        AvailableApp[] previewApps = [new("lanxin", "蓝信", true, "status-notifier-flash", "attention-only", true),
+            new("auto-preview", "自动发现的应用", true, "status-notifier-auto", "attention-only")];
+        var fixture = Path.Combine(directory, "tray-events.jsonl");
+        if (File.Exists(fixture) && new FileInfo(fixture).Length <= 8 * 1024 * 1024) {
+            var events = new List<AgentEvent>();
+            using var input = File.OpenText(fixture);
+            await foreach (var line in Protocol.Lines(input, default)) events.Add(AgentEvent.Parse(line));
+            foreach (var ev in events.Where(e => e.AppId != null && e.Icon != null)) iconHistory.Record(IconHistory.Scope(saved), ev.AppId!, ev.Icon!);
+            previewIconEvents = events.Where(e => e.Icon is { Removed: false }).GroupBy(e => (e.AppId, e.Icon!.InstanceId)).Select(g => g.Last()).ToArray();
+            previewApps = events.LastOrDefault(e => e.Apps != null)?.Apps ?? previewApps;
+        }
+        RenderApps(previewApps);
         StatusTitle.Text = "正在接收虚拟机提醒"; StatusDetail.Text = "已连接。应用提醒会自动转发到这台电脑。";
         StatusIcon.Text = "\uE73E"; HostSummary.Text = "192.0.2.10"; AppsSummary.Text = "1 个应用已开启转发"; QuickConnect.Content = "重新连接";
         ConnectionLabel.Text = "已连接"; ConnectionDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "Accent");
@@ -413,6 +454,11 @@ public partial class MainWindow : Window
                         || IgnoredAppsButton.TranslatePoint(new System.Windows.Point(IgnoredAppsButton.ActualWidth, 0), Root).X > AppsPage.TranslatePoint(new System.Windows.Point(AppsPage.ActualWidth, 0), Root).X + 1)
                         throw new InvalidOperationException("Application discovery/search actions must fit at minimum width");
                     Capture("apps-900" + (light ? "-light" : "-dark"));
+                    if (previewIconEvents.Length > 0) {
+                        AppSearchInput.Text = "aTrust"; UpdateLayout();
+                        if (AppItems.Items.OfType<AppChoice>().Single().TrayIcon == null) throw new InvalidOperationException("Live aTrust fixture must show its real tray image");
+                        Capture("apps-atrust" + (light ? "-light" : "-dark")); AppSearchInput.Clear();
+                    }
                     var catalogSettings = saved;
                     var catalogApps = displayed ?? [];
                     saved = AppCatalog.ToggleIgnored(saved, "preview-atrust", "aTrustTray2");

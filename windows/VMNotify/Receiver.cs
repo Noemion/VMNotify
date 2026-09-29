@@ -146,6 +146,12 @@ internal sealed class Receiver
     }
     private void ClearAttention() { lock (selectionLock) { activeAlerts.Clear(); observations.Clear(); legacyAttention.Clear(); } }
     internal void ApplyLegacyAttention(AgentEvent ev) { lock (selectionLock) {
+        if (ev.Kind == "attention") {
+            var icons = GetIcons(ev.AppId!);
+            string reason = icons.Any(i => i.Attention == true) ? "应用上报需要关注" : icons.Any(i => i.Flashing == true) ? "检测到托盘图标持续闪烁" : "采集端上报托盘提醒";
+            ev = ev with { Message = reason + "。" };
+            Diagnostics.Write($"Tray trigger: app={ev.AppId}; reason={reason}; instances=" + string.Join(";", icons.Select(i => $"{i.InstanceId}: flashing={i.Flashing}, attention={i.Attention}, fingerprint={i.Fingerprint}")));
+        }
         if (ev.Kind == "cleared") legacyAttention.Remove(ev.AppId!);
         else { legacyAttention[ev.AppId!] = ev; if (legacyAttention.Count > 64) throw new InvalidDataException("代理发送了过多应用"); }
         if (!rules.ContainsKey(ev.AppId!)) ApplyAttention(ev);

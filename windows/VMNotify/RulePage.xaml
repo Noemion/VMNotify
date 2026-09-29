@@ -1,11 +1,9 @@
-<Window x:Class="VMNotify.RuleWindow"
+<UserControl x:Class="VMNotify.RulePage"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="通知规则" Width="660" Height="790" MinWidth="560" MinHeight="480"
-        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Background="{DynamicResource WindowBackground}" Foreground="{DynamicResource MainText}"
         FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="14">
-    <Window.Resources>
+    <UserControl.Resources>
         <Style TargetType="ComboBox">
             <Setter Property="Foreground" Value="{DynamicResource MainText}"/>
             <Setter Property="Background" Value="{DynamicResource InputBackground}"/>
@@ -35,8 +33,8 @@
                 <ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Item" Property="Background" Value="{DynamicResource NavSelected}"/></Trigger></ControlTemplate.Triggers>
             </ControlTemplate></Setter.Value></Setter>
         </Style>
-    </Window.Resources>
-    <Border Background="{DynamicResource WindowBackground}" Padding="24"><Grid>
+    </UserControl.Resources>
+    <Border Background="{DynamicResource WindowBackground}"><Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <StackPanel Margin="0,0,0,16">
             <TextBlock x:Name="AppTitle" FontSize="23" FontWeight="SemiBold"/>
@@ -55,11 +53,21 @@
             <StackPanel Margin="0,0,12,0">
                 <Border Style="{DynamicResource Card}"><StackPanel>
                     <TextBlock Text="当前托盘状态" FontWeight="SemiBold"/>
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                        <Border x:Name="ImageBackdrop" Width="40" Height="40" CornerRadius="5" Background="{DynamicResource InputBackground}">
+                            <Image x:Name="LiveImage" Width="24" Height="24" Stretch="Uniform" StretchDirection="DownOnly" SnapsToDevicePixels="True" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                        </Border>
+                        <TextBlock x:Name="MissingImage" Text="无图像" FontSize="11" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="LiveStatus" Grid.Column="1" Style="{DynamicResource Secondary}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                    </Grid>
                     <ComboBox x:Name="InstanceInput" DisplayMemberPath="Label" SelectedValuePath="Id" Margin="0,8,0,6" MinHeight="30" SelectionChanged="InstanceChanged"/>
-                    <TextBlock x:Name="LiveStatus" Style="{DynamicResource Secondary}"/>
                     <TextBox x:Name="LiveName" IsReadOnly="True" Margin="0,8,0,0" AutomationProperties.Name="当前图标名称"/>
                     <TextBlock Text="图标名称（可选中复制）；不同颜色可能使用相同名称。" Style="{DynamicResource Secondary}"/>
-                    <WrapPanel x:Name="ColorSwatches" Margin="0,8,0,0"/>
+                    <TextBlock Text="已发现的图标状态" FontWeight="SemiBold" Margin="0,14,0,6"/>
+                    <TextBlock Text="点击图标设为通知目标；自动补充已出现的状态，最多保存 16 种。" Style="{DynamicResource Secondary}"/>
+                    <WrapPanel x:Name="IconStates" Margin="0,10,0,0"/>
+                    <TextBlock x:Name="HistoryEmpty" Text="尚未采集到图标，请连接虚拟机并让应用显示对应状态。" Style="{DynamicResource Secondary}" Margin="0,8,0,0"/>
                 </StackPanel></Border>
                 <TextBlock Text="通知条件" Margin="0,10,0,6"/>
                 <ComboBox x:Name="ConditionInput" MinHeight="34" SelectionChanged="ConditionChanged"/>
@@ -70,6 +78,8 @@
                         <Button x:Name="RecordButton" Content="使用当前状态" Click="RecordClicked" Margin="0,0,8,0"/>
                         <Button x:Name="PickColorButton" Content="选择颜色…" Click="PickColorClicked"/>
                     </WrapPanel>
+                    <TextBlock x:Name="ColorSwatchesLabel" Text="当前图标的主要颜色（点击填入目标颜色）" Style="{DynamicResource Secondary}" Margin="0,10,0,0"/>
+                    <WrapPanel x:Name="ColorSwatches" Margin="0,8,0,0"/>
                 </StackPanel>
                 <StackPanel x:Name="TolerancePanel" Margin="0,12,0,0">
                     <TextBlock Text="颜色容差（0–255，越小越严格）"/>
@@ -93,9 +103,9 @@
         </ScrollViewer>
         <Grid Grid.Row="2" Margin="0,18,0,0">
             <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <Button Content="恢复默认" HorizontalAlignment="Left" Click="ResetClicked"/>
-            <Button Grid.Column="1" Content="取消" IsCancel="True" Margin="0,0,10,0"/>
-            <Button Grid.Column="2" Content="保存规则" Style="{DynamicResource Primary}" Click="SaveClicked"/>
+            <Button x:Name="ResetButton" Content="恢复默认" HorizontalAlignment="Left" Click="ResetClicked"/>
+            <Button x:Name="BackButton" Grid.Column="1" Content="返回应用管理" Click="BackClicked" ToolTip="返回并放弃未保存的修改" Margin="0,0,10,0"/>
+            <Button x:Name="SaveButton" Grid.Column="2" Content="保存规则" Style="{DynamicResource Primary}" Click="SaveClicked"/>
         </Grid>
     </Grid></Border>
-</Window>
+</UserControl>

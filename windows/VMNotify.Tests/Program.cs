@@ -187,3 +187,5 @@ SshAuthorizationTests.Run();
 DiscoveryTests.Run();
 await BundleTests.Run();
 CatalogTests.Run();
+TrayImageTests.Run();
+IconHistoryTests.Run();

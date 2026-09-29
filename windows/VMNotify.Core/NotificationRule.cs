@@ -57,7 +57,7 @@ public sealed record NotificationRule
 }
 
 public sealed record IconObservation(string InstanceId, string? Fingerprint, string? IconName, bool? Colorful,
-    string[] Colors, bool? Flashing, bool? Attention, bool Removed = false);
+    string[] Colors, bool? Flashing, bool? Attention, bool Removed = false, TrayImage? Preview = null);
 
 // Independent state for each instance; unknown readings interrupt the hold timer.
 public sealed class RuleState

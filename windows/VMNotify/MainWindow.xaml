@@ -295,7 +295,10 @@
                         <ItemsControl x:Name="AppItems"><ItemsControl.ItemTemplate><DataTemplate>
                             <Border Style="{StaticResource Card}" Padding="20,21"><Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <Border Width="34" Height="34" CornerRadius="7" Background="{DynamicResource InfoBackground}" HorizontalAlignment="Left"><TextBlock Text="&#xE8F2;" FontFamily="Segoe MDL2 Assets" Foreground="{DynamicResource Accent}" FontSize="19" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                                <Border Width="30" Height="30" CornerRadius="5" Background="{Binding IconBackground}" HorizontalAlignment="Left"><Grid>
+                                    <Image Source="{Binding TrayIcon}" Width="24" Height="24" Stretch="Uniform" StretchDirection="DownOnly" SnapsToDevicePixels="True" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                                    <TextBlock Text="&#xE8F2;" Visibility="{Binding PlaceholderVisibility}" FontFamily="Segoe MDL2 Assets" Foreground="{DynamicResource Accent}" FontSize="19" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Grid></Border>
                                 <StackPanel Grid.Column="1" Margin="0,0,12,0"><TextBlock Text="{Binding Name}" FontWeight="SemiBold"/><TextBlock Text="{Binding Detail}" Style="{StaticResource Secondary}"/><TextBlock Text="{Binding RuleSummary}" Style="{StaticResource Secondary}"/></StackPanel>
                                 <StackPanel Grid.Column="2" VerticalAlignment="Center">
                                     <CheckBox Style="{StaticResource Switch}" HorizontalAlignment="Right" IsChecked="{Binding Enabled, Mode=TwoWay}" IsEnabled="{Binding CanEnable}" Click="AppToggleClicked" AutomationProperties.Name="{Binding Name}"/>
@@ -326,6 +329,7 @@
                     </StackPanel>
                 </Grid>
             </ScrollViewer>
+            <ContentControl x:Name="RulesHost" Grid.Row="1" Margin="0,0,18,0" Visibility="Collapsed"/>
             <Grid x:Name="SettingsFooter" Grid.Row="2" Margin="0,18,18,0" Visibility="Collapsed">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <TextBlock x:Name="SettingsSaveStatus" Text="修改后保存设置。" Style="{StaticResource Secondary}" VerticalAlignment="Center" Margin="0,0,16,0"/>

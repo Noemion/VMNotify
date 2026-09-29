@@ -69,7 +69,7 @@ internal static class BundleTests
                 while (!receiver.AvailableApps.Any(a => a.Name == "aTrustTray2")) {
                     await Task.Delay(100, stop.Token);
                 }
-                if (receiver.AgentVersion != "0.1.4") throw new Exception("Bundle installation version mismatch");
+                if (!bundle.ReadManifest().Any(e => e.Version == receiver.AgentVersion)) throw new Exception("Bundle installation version mismatch");
             } finally { stop.Cancel(); await running; }
         }
         try {

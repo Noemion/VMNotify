@@ -6,6 +6,35 @@ pub struct Features {
     pub fingerprint: Option<String>,
     pub colorful: Option<bool>,
     pub colors: Vec<String>,
+    pub preview: Option<Preview>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, serde::Deserialize)]
+pub struct Preview {
+    pub width: u32,
+    pub height: u32,
+    pub argb_hex: String,
+}
+
+fn thumbnail(w: u32, h: u32, bytes: &[u8]) -> Preview {
+    use std::fmt::Write;
+    let scale = w.max(h).max(32);
+    let width = (w * 32 / scale).max(1);
+    let height = (h * 32 / scale).max(1);
+    let mut argb_hex = String::with_capacity((width * height * 8) as usize);
+    for y in 0..height {
+        for x in 0..width {
+            let i = (((y * h / height) * w + x * w / width) * 4) as usize;
+            for b in &bytes[i..i + 4] {
+                let _ = write!(argb_hex, "{b:02x}");
+            }
+        }
+    }
+    Preview {
+        width,
+        height,
+        argb_hex,
+    }
 }
 
 // Parse gdbus' a(iiay) representation, including its optional `byte` annotation.
@@ -70,6 +99,7 @@ pub fn analyze(pixels: Option<&str>, name: Option<&str>) -> Features {
         }
     };
     if let Some((w, h, bytes)) = pixels.and_then(pixmap) {
+        result.preview = Some(thumbnail(w, h, &bytes));
         feed(b"argb-v1");
         feed(&w.to_be_bytes());
         feed(&h.to_be_bytes());
@@ -123,6 +153,19 @@ pub fn analyze(pixels: Option<&str>, name: Option<&str>) -> Features {
 mod tests {
     use super::*;
     #[test]
+    fn thumbnails_preserve_argb_and_bound_dimensions() {
+        let preview = thumbnail(2, 1, &[255, 255, 0, 0, 128, 0, 255, 0]);
+        assert_eq!(preview.argb_hex, "ffff00008000ff00");
+        let mut pixels = Vec::new();
+        for _ in 0..64 {
+            pixels.extend_from_slice(&[255, 255, 0, 0, 0, 0, 0, 255]);
+        }
+        let small = thumbnail(64, 2, &pixels);
+        assert_eq!((small.width, small.height), (32, 1));
+        assert_eq!(small.argb_hex, "ffff0000".repeat(32));
+        assert!(serde_json::to_string(&small).unwrap().len() < 9000);
+    }
+    #[test]
     fn colors_and_invalid_data() {
         let gray = analyze(Some("(<[(1, 1, [byte 0xff, 0x80, 0x80, 0x80])],>,)"), None);
         assert_eq!(gray.colorful, Some(false));
@@ -131,6 +174,14 @@ mod tests {
         assert_eq!(red.colorful, Some(true));
         assert_eq!(red.colors, ["#FF0000"]);
         assert_ne!(gray.fingerprint, red.fingerprint);
+        assert_eq!(
+            red.fingerprint,
+            analyze(
+                Some("(<[(1,1,[255,255,0,0])]>,)"),
+                Some("renamed-but-same-pixels")
+            )
+            .fingerprint
+        );
         assert_eq!(
             analyze(Some("(<[(1, 1, [byte 0x00, 0xff, 0, 0])]>,)"), None).colorful,
             None

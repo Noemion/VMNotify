@@ -37,13 +37,16 @@ internal static class DiscoveryTests
         }
         try {
             await WaitFor(() => receiver.CanRediscover && receiver.AvailableApps.Any(a => a.Id == id));
-            if (receiver.AgentVersion != "0.1.4") throw new Exception("Unexpected live agent version");
+            var version = receiver.AgentVersion;
+            if (version == null || Version.Parse(version) < new Version(0, 1, 4)) throw new Exception("Unexpected live agent version");
+            if (Version.Parse(version) >= new Version(0, 2, 0))
+                await WaitFor(() => receiver.GetIcons(id).Any(i => i.Preview != null) && receiver.GetIcons("lanxin").Any(i => i.Preview != null));
             var revision = receiver.DiscoverySessionRevision;
             if (!receiver.RequestRediscovery() || receiver.RequestRediscovery()) throw new Exception("Rediscovery request/debounce failed");
             await WaitFor(() => receiver.InventoryRevision > revision && receiver.CanRediscover);
-            if (!receiver.IsEnabled(id) || !receiver.AvailableApps.Any(a => a.Id == id) || receiver.AgentVersion != "0.1.4")
+            if (!receiver.IsEnabled(id) || !receiver.AvailableApps.Any(a => a.Id == id) || receiver.AgentVersion != version)
                 throw new Exception("Rediscovery lost aTrust or app selection");
-            Console.WriteLine("PASS: live agent 0.1.4; aTrust discovered before and after manual rediscovery; selection preserved. Apps: " + string.Join(", ", receiver.AvailableApps.Select(a => a.Name)));
+            Console.WriteLine($"PASS: live agent {version}; aTrust discovered before and after manual rediscovery; selection preserved; image telemetry verified for 0.2.0+. Apps: " + string.Join(", ", receiver.AvailableApps.Select(a => a.Name)));
         } finally { stop.Cancel(); await running; }
     }
 }

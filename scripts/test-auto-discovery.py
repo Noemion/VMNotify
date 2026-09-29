@@ -129,6 +129,8 @@ def main():
             assert {i["icon_name"] for i in icons} >= {"chat-0", "chat-255"}, "icon names must be exposed verbatim"
             assert all(i["colorful"] is None and i["colors"] == [] for i in icons), "name-only icons cannot imply grayscale"
         else:
+            assert any(i.get("preview") == dict(width=1, height=1, argb_hex="ffff0000") for i in icons), "preview must transmit red ARGB pixels"
+            assert any(i.get("preview") == dict(width=1, height=1, argb_hex="ff000000") for i in icons), "preview must follow icon changes"
             assert any(i["colorful"] is False and "#000000" in i["colors"] for i in icons), "black pixel must be grayscale"
             assert any(i["colorful"] is True and "#FF0000" in i["colors"] for i in icons), "network-order ARGB must decode red"
         print("PASS: real D-Bus icon telemetry, stable identity, color/name capability and instance removal")
