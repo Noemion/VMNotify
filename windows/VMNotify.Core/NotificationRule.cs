@@ -54,6 +54,23 @@ public sealed record NotificationRule
         RuleCondition.IconEquals => "变为记录的图标", RuleCondition.IconDiffers => "离开记录的图标",
         RuleCondition.NameEquals => "图标名称等于 " + Target, RuleCondition.NameDiffers => "图标名称不等于 " + Target, _ => "未知规则"
     };
+    public string NotificationText(string appName, IconObservation icon)
+    {
+        if (!string.IsNullOrWhiteSpace(Message)) return Message;
+        var state = icon.Colorful is bool colorful ? colorful ? "彩色" : "灰色" : "已选状态";
+        var detail = Condition switch {
+            RuleCondition.IconEquals => "图标变为" + state,
+            RuleCondition.IconDiffers => "图标已离开所选状态" + (icon.Colorful == null ? "" : "，当前为" + state),
+            RuleCondition.Colorful => "图标变为彩色",
+            RuleCondition.Grayscale => "图标变为灰色",
+            RuleCondition.Color => "图标颜色接近 " + Target,
+            RuleCondition.Flashing => "图标正在闪烁",
+            RuleCondition.NeedsAttention => "上报需要关注",
+            RuleCondition.Default => icon.Attention == true ? "上报需要关注" : "图标正在闪烁",
+            _ => Description
+        };
+        return appName + " " + detail;
+    }
 }
 
 public sealed record IconObservation(string InstanceId, string? Fingerprint, string? IconName, bool? Colorful,

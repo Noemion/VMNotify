@@ -49,12 +49,36 @@ public partial class MainWindow
         var windowCount = System.Windows.Application.Current.Windows.Count;
         var page = OpenRules(previewId, "aTrustTray2", () => [icon]);
         try {
+            var newPage = new RulePage("测试", null, () => [icon], () => []);
+            newPage.ConditionInput.SelectedValue = RuleCondition.Grayscale;
+            if (newPage.ConditionInput.SelectedIndex >= 0) throw new InvalidOperationException("New rules must not offer legacy grayscale condition");
+            newPage.ConditionInput.SelectedValue = RuleCondition.Colorful;
+            if (newPage.ConditionInput.SelectedIndex >= 0) throw new InvalidOperationException("New rules must not offer legacy colorful condition");
+            if (!Equals(page.ConditionInput.SelectedValue, RuleCondition.Grayscale)) throw new InvalidOperationException("Existing legacy rule must remain editable");
+            page.ConditionInput.IsDropDownOpen = true;
+            UpdateLayout(); await Task.Delay(100);
+            var dropdown = (ScrollViewer)page.ConditionInput.Template.FindName("DropDownScroll", page.ConditionInput);
+            dropdown.ApplyTemplate();
+            var dropdownBar = (System.Windows.Controls.Primitives.ScrollBar)dropdown.Template.FindName("PART_VerticalScrollBar", dropdown);
+            if (dropdownBar.Style != FindResource("OverlayBar") || dropdown.ScrollableHeight <= 0)
+                throw new InvalidOperationException("Dropdown must use the main themed scrollbar and allow scrolling");
+            dropdown.ScrollToEnd(); UpdateLayout();
+            if (dropdown.VerticalOffset <= 0) throw new InvalidOperationException("Dropdown scrolling failed");
+            page.RuleScroll.ApplyTemplate();
+            var ruleBar = (System.Windows.Controls.Primitives.ScrollBar)page.RuleScroll.Template.FindName("PART_VerticalScrollBar", page.RuleScroll);
+            if (ruleBar.Style != dropdownBar.Style) throw new InvalidOperationException("Rule page and dropdown scrollbar styles differ");
+            var dropdownBorder = (Border)dropdown.Parent;
+            var dropdownBitmap = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Math.Ceiling(dropdownBorder.ActualWidth), (int)Math.Ceiling(dropdownBorder.ActualHeight), 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+            dropdownBitmap.Render(dropdownBorder);
+            var dropdownEncoder = new System.Windows.Media.Imaging.PngBitmapEncoder(); dropdownEncoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(dropdownBitmap));
+            using (var output = System.IO.File.Create(System.IO.Path.Combine(directory, $"rules-dropdown-{(light ? "light" : "dark")}.png"))) dropdownEncoder.Save(output);
+            page.ConditionInput.IsDropDownOpen = false;
             if (page.IconStates.Children.Count == 0) throw new InvalidOperationException("Current image must appear in the discovered states list");
             ((Button)page.IconStates.Children[0]).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
-            if (page.ConditionInput.SelectedIndex != (int)RuleCondition.IconEquals || page.TargetInput.Text.Length == 0)
+            if (!Equals(page.ConditionInput.SelectedValue, RuleCondition.IconEquals) || page.TargetInput.Text.Length == 0)
                 throw new InvalidOperationException("Clicking a discovered image must select it as notification target");
             foreach (var condition in new[] { RuleCondition.Grayscale, RuleCondition.NameDiffers, RuleCondition.Color, RuleCondition.IconDiffers }) {
-                page.ConditionInput.SelectedIndex = (int)condition;
+                page.ConditionInput.SelectedValue = condition;
                 if (condition == RuleCondition.NameDiffers) page.TargetInput.Text = "atrust-connected";
                 if (condition is RuleCondition.Color or RuleCondition.IconDiffers)
                     page.RecordButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
@@ -86,7 +110,7 @@ public partial class MainWindow
             page.SampleInput.Text = "invalid";
             page.SaveButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
             if (RulesHost.Content != page || page.ValidationMessage.Text.Length == 0) throw new InvalidOperationException("Invalid input must remain on the rule page");
-            page.ConditionInput.SelectedIndex = (int)RuleCondition.Grayscale; page.SampleInput.Text = "1";
+            page.ConditionInput.SelectedValue = RuleCondition.Grayscale; page.SampleInput.Text = "1";
             page.SaveButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
             if (RulesHost.Content != null || saved.Rules[previewId].SampleMilliseconds != 1000 || AppsPage.Visibility != Visibility.Visible)
                 throw new InvalidOperationException("Saving must apply the rule and return to apps");

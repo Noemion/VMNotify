@@ -4,6 +4,20 @@
         Background="{DynamicResource WindowBackground}" Foreground="{DynamicResource MainText}"
         FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="14">
     <UserControl.Resources>
+        <Style x:Key="RuleScrollStyle" TargetType="ScrollViewer">
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ScrollViewer">
+                <Grid Background="Transparent">
+                    <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/></Grid.ColumnDefinitions>
+                    <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" ClipToBounds="True" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" CanContentScroll="{TemplateBinding CanContentScroll}"/>
+                    <ScrollBar x:Name="PART_VerticalScrollBar" Grid.Column="1" Style="{DynamicResource OverlayBar}" Orientation="Vertical"
+                        Minimum="0" Maximum="{TemplateBinding ScrollableHeight}" ViewportSize="{TemplateBinding ViewportHeight}"
+                        Value="{Binding VerticalOffset, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}"
+                        Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+                </Grid>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
         <Style TargetType="ComboBox">
             <Setter Property="Foreground" Value="{DynamicResource MainText}"/>
             <Setter Property="Background" Value="{DynamicResource InputBackground}"/>
@@ -20,7 +34,7 @@
                     <ContentPresenter Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" Margin="10,6,32,6" VerticalAlignment="Center" IsHitTestVisible="False"/>
                     <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False">
                         <Border Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource InputBorder}" BorderThickness="1" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
-                            <ScrollViewer MaxHeight="300"><ItemsPresenter/></ScrollViewer>
+                            <ScrollViewer x:Name="DropDownScroll" MaxHeight="300" Style="{StaticResource RuleScrollStyle}"><ItemsPresenter/></ScrollViewer>
                         </Border>
                     </Popup>
                 </Grid>
@@ -40,16 +54,7 @@
             <TextBlock x:Name="AppTitle" FontSize="23" FontWeight="SemiBold"/>
             <TextBlock Text="选择这个应用在什么情况下通知你。保存后即时生效。" Style="{DynamicResource Secondary}"/>
         </StackPanel>
-        <ScrollViewer x:Name="RuleScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <ScrollViewer.Template><ControlTemplate TargetType="ScrollViewer">
-                <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/></Grid.ColumnDefinitions>
-                    <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" ClipToBounds="True" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" CanContentScroll="{TemplateBinding CanContentScroll}"/>
-                    <ScrollBar x:Name="PART_VerticalScrollBar" Grid.Column="1" Style="{DynamicResource OverlayBar}" Orientation="Vertical"
-                        Minimum="0" Maximum="{TemplateBinding ScrollableHeight}" ViewportSize="{TemplateBinding ViewportHeight}"
-                        Value="{Binding VerticalOffset, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}"
-                        Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
-                </Grid>
-            </ControlTemplate></ScrollViewer.Template>
+        <ScrollViewer x:Name="RuleScroll" Grid.Row="1" Style="{StaticResource RuleScrollStyle}">
             <StackPanel Margin="0,0,12,0">
                 <Border Style="{DynamicResource Card}"><StackPanel>
                     <TextBlock Text="当前托盘状态" FontWeight="SemiBold"/>
@@ -96,7 +101,7 @@
                 </Grid>
                 <TextBlock Text="持续时间用于过滤短暂变化；重复间隔仅控制这个应用再次提醒的频率，0 表示仅提醒一次。" Style="{DynamicResource Secondary}" Margin="0,6,0,0"/>
                 <CheckBox x:Name="InitialInput" Foreground="{DynamicResource MainText}" Content="开始监测时已符合条件，也通知我" Margin="0,16,0,0"/>
-                <TextBlock Text="通知内容（留空则使用条件说明）" Margin="0,16,0,6"/>
+                <TextBlock Text="通知内容（留空则直接说明图标状态变化）" Margin="0,16,0,6"/>
                 <TextBox x:Name="MessageInput" MaxLength="200"/>
                 <TextBlock x:Name="ValidationMessage" Foreground="{DynamicResource Accent}" TextWrapping="Wrap" Margin="0,12,0,0"/>
             </StackPanel>

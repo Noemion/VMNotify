@@ -20,7 +20,8 @@ public partial class RulePage : System.Windows.Controls.UserControl
     internal event Action<NotificationRule?>? SaveRequested;
     internal event Action? BackRequested;
     private TrayImage? displayedPreview;
-    private RuleCondition Condition => (RuleCondition)Math.Max(0, ConditionInput.SelectedIndex);
+    private sealed record ConditionChoice(RuleCondition Value, string Label);
+    private RuleCondition Condition => ConditionInput.SelectedValue is RuleCondition value ? value : RuleCondition.Default;
     private IconObservation? Current => icons.FirstOrDefault(i => i.InstanceId == InstanceInput.SelectedValue as string);
     internal RulePage(string name, NotificationRule? rule, Func<IconObservation[]> readIcons, Func<RecordedIcon[]> readHistory)
     {
@@ -28,9 +29,14 @@ public partial class RulePage : System.Windows.Controls.UserControl
         this.readHistory = readHistory;
         InitializeComponent();
         AppTitle.Text = name + " · 通知规则";
-        ConditionInput.ItemsSource = Enum.GetValues<RuleCondition>().Select(c => new NotificationRule { Condition = c }.Description).ToArray();
         rule ??= new();
-        ConditionInput.SelectedIndex = (int)rule.Condition;
+        ConditionInput.DisplayMemberPath = "Label";
+        ConditionInput.SelectedValuePath = "Value";
+        ConditionInput.ItemsSource = Enum.GetValues<RuleCondition>()
+            .Where(c => c is not (RuleCondition.Colorful or RuleCondition.Grayscale) || c == rule.Condition)
+            .Select(c => new ConditionChoice(c, new NotificationRule { Condition = c }.Description
+                + (c is RuleCondition.Colorful or RuleCondition.Grayscale ? "（旧版规则）" : ""))).ToArray();
+        ConditionInput.SelectedValue = rule.Condition;
         TargetInput.Text = rule.Target; ToleranceInput.Text = rule.Tolerance.ToString();
         HoldInput.Text = rule.HoldSeconds.ToString(); RepeatInput.Text = rule.RepeatSeconds.ToString();
         SampleInput.Text = (rule.SampleMilliseconds / 1000m).ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -74,7 +80,7 @@ public partial class RulePage : System.Windows.Controls.UserControl
                 ToolTip = "点击设为通知图标" + (state.IconName == null ? "" : "\n" + state.IconName),
                 BorderThickness = new Thickness(Condition == RuleCondition.IconEquals && TargetInput.Text == state.Fingerprint ? 2 : 1) };
             if (Condition == RuleCondition.IconEquals && TargetInput.Text == state.Fingerprint) button.SetResourceReference(BorderBrushProperty, "Accent");
-            button.Click += (_, _) => { ConditionInput.SelectedIndex = (int)RuleCondition.IconEquals; TargetInput.Text = state.Fingerprint; ShowHistory(); };
+            button.Click += (_, _) => { ConditionInput.SelectedValue = RuleCondition.IconEquals; TargetInput.Text = state.Fingerprint; ShowHistory(); };
             IconStates.Children.Add(button);
         }
     }
@@ -97,7 +103,7 @@ public partial class RulePage : System.Windows.Controls.UserControl
             foreach (var color in displayedColors) {
                 var button = new Button { Width = 28, Height = 26, Padding = new Thickness(0), Margin = new Thickness(0, 0, 6, 4),
                     Background = new SolidColorBrush((Color)System.Windows.Media.ColorConverter.ConvertFromString(color)), ToolTip = color + " · 点击用于指定颜色" };
-                button.Click += (_, _) => { ConditionInput.SelectedIndex = (int)RuleCondition.Color; TargetInput.Text = color; };
+                button.Click += (_, _) => { ConditionInput.SelectedValue = RuleCondition.Color; TargetInput.Text = color; };
                 ColorSwatches.Children.Add(button);
             }
         }

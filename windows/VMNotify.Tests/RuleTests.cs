@@ -10,6 +10,26 @@ internal static class RuleTests
         var gray = new IconObservation(":1.5/item", "pix-v1-gray", "atrust-offline", false, ["#808080"], false, false);
         var colorful = gray with { Fingerprint = "pix-v1-color", IconName = "atrust-online", Colorful = true, Colors = ["#00AAFF"] };
         var missing = gray with { Colorful = null, Fingerprint = null, IconName = null, Colors = [], Flashing = null, Attention = null };
+        var selected = new NotificationRule { Condition = RuleCondition.IconEquals, Target = colorful.Fingerprint! };
+        Check(selected.NotificationText("aTrust", colorful) == "aTrust 图标变为彩色", "selected colorful state message");
+        Check(selected.NotificationText("aTrust", gray) == "aTrust 图标变为灰色", "message describes observed state");
+        Check(selected.NotificationText("aTrust", missing) == "aTrust 图标变为已选状态", "unknown color is not grayscale");
+        Check((selected with { Message = "自定义" }).NotificationText("aTrust", colorful) == "自定义", "custom message preserved");
+        var messages = new Receiver(new TimingTests.Clock()); messages.SetEnabledApps(["atrust"]);
+        messages.SetRules(new() { ["atrust"] = selected });
+        messages.ApplyObservation(new("heartbeat", "atrust", "aTrust", Icon: colorful));
+        Check(messages.Notifications.Reader.TryRead(out var actualMessage) && actualMessage.Message == "aTrust 图标变为彩色", "receiver delivers state without generic prefix");
+        var reminderClock = new TimingTests.Clock();
+        var reminders = new Receiver(reminderClock); reminders.SetEnabledApps(["atrust"]);
+        reminders.SetRules(new() { ["atrust"] = selected with { Condition = RuleCondition.IconDiffers, Target = "pix-v1-other", RepeatSeconds = 10 } });
+        reminders.ApplyObservation(new("heartbeat", "atrust", "aTrust", Icon: gray));
+        reminders.Notifications.Reader.TryRead(out _);
+        for (int i = 0; i < 10; i++) {
+            reminderClock.Advance(TimeSpan.FromSeconds(1));
+            reminders.ApplyObservation(new("heartbeat", "atrust", "aTrust", Icon: colorful));
+            reminders.QueueReminders();
+        }
+        Check(reminders.Notifications.Reader.TryRead(out var stateReminder) && stateReminder.Message == "aTrust 图标已离开所选状态，当前为彩色", "repeat uses current state rather than original gray state");
         var rule = new NotificationRule { Condition = RuleCondition.Grayscale, HoldSeconds = 5, RepeatSeconds = 10, Message = "aTrust 未连接" };
         Check(rule.Matches(gray) == true && rule.Matches(colorful) == false && rule.Matches(missing) == null, "gray and unknown must differ");
         Check((rule with { Condition = RuleCondition.Color, Target = "#0099F0", Tolerance = 20 }).Matches(colorful) == true, "color tolerance");

@@ -132,7 +132,7 @@ public partial class MainWindow : Window
                     var message = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "zh"
                         ? ev.Kind == "reminder" ? $"虚拟机【{saved.Host}】中的【{ev.AppName}】仍符合托盘提醒条件。" : $"虚拟机【{saved.Host}】中的【{ev.AppName}】触发了托盘提醒。"
                         : ev.Kind == "reminder" ? $"Tray attention remains active for [{ev.AppName}] on virtual machine [{saved.Host}]." : $"Tray attention from [{ev.AppName}] on virtual machine [{saved.Host}].";
-                    if (ev.Message != null) message = $"虚拟机【{saved.Host}】中的【{ev.AppName}】：{ev.Message}";
+                    if (ev.Message != null) message = ev.Message;
                     LastNotification.Text = $"{message}  ·  {DateTime.Now:HH:mm}";
                     Diagnostics.Write("Notification dequeued: " + ev.AppId);
                     ShowNotification("VMNotify · " + ev.AppName, message);

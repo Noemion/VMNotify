@@ -88,8 +88,10 @@ internal sealed class Receiver
         if (!rules.TryGetValue(appId, out var rule)) return;
         var active = observations.Where(p => p.Key.App == appId).Select(p => p.Value).FirstOrDefault(o => o.State.Active);
         if (active == null) { activeAlerts.Remove(appId); return; }
-        ApplyAttention(active.Event with { Kind = "attention", Icon = null,
-            Message = string.IsNullOrWhiteSpace(rule.Message) ? "符合通知条件：" + rule.Description + "。" : rule.Message });
+        var notification = active.Event with { Kind = "attention", Icon = null,
+            Message = rule.NotificationText(active.Event.AppName ?? appId, active.Event.Icon!) };
+        if (activeAlerts.TryGetValue(appId, out var existing)) existing.Original = notification;
+        else ApplyAttention(notification);
     }
     private readonly TimeProvider clock;
     public Func<string, CancellationToken, Task<bool>>? ConfirmHost { get; set; }
