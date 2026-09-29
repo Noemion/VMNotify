@@ -104,6 +104,9 @@ Name: "{group}\{cm:UninstallApp}"; Filename: "{uninstallexe}"
 [Run]
 Filename: "{app}\VMNotify.exe"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent
 
+[UninstallRun]
+Filename: "{app}\VMNotify.exe"; Parameters: "--unregister-notifications"; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "UnregisterNotifications"
+
 [Code]
 var RestoreStartupAfterMove: Boolean;
 

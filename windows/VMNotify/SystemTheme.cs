@@ -1,17 +1,19 @@
-using Microsoft.Win32;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using Windows.UI.ViewManagement;
 
 namespace VMNotify;
 
 internal static class SystemTheme
 {
+    internal static readonly UISettings Settings = new();
     public static bool IsLight()
     {
-        using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-        return key?.GetValue("AppsUseLightTheme") is not int value || value != 0;
+        // Microsoft's documented Win32 theme detection uses the system foreground.
+        var foreground = Settings.GetColorValue(UIColorType.Foreground);
+        return 5 * foreground.G + 2 * foreground.R + foreground.B <= 8 * 128;
     }
 
     public static void Apply(Window window, bool light)

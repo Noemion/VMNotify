@@ -42,6 +42,7 @@ public partial class MainWindow : Window
     private readonly Receiver receiver = new();
     private readonly System.Windows.Forms.NotifyIcon tray;
     private readonly System.Drawing.Icon trayIcon;
+    private DesktopNotifications? desktopNotifications;
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(200) };
     private readonly DispatcherTimer scrollIdle = new() { Interval = TimeSpan.FromMilliseconds(1000) };
     private ScrollBar? overlayBar;
@@ -77,7 +78,7 @@ public partial class MainWindow : Window
             windowSource?.AddHook(WindowMessage);
             SystemTheme.Apply(this, SystemTheme.IsLight());
         };
-        if (!preview) SystemEvents.UserPreferenceChanged += ThemeChanged;
+        if (!preview) SystemTheme.Settings.ColorValuesChanged += ThemeChanged;
         scrollIdle.Tick += (_, _) => {
             if (overlayBar?.IsMouseOver == true || overlayBar?.IsMouseCaptureWithin == true) return;
             scrollIdle.Stop();
@@ -89,11 +90,6 @@ public partial class MainWindow : Window
         using (var stream = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/Assets/VMNotify.ico")).Stream)
         using (var loadedIcon = new System.Drawing.Icon(stream, 32, 32)) trayIcon = (System.Drawing.Icon)loadedIcon.Clone();
         tray = new() { Icon = trayIcon, Text = "VMNotify", Visible = !preview };
-        if (!preview) {
-            tray.BalloonTipShown += (_, _) => Diagnostics.Write("Windows balloon shown");
-            tray.BalloonTipClosed += (_, _) => Diagnostics.Write("Windows balloon closed");
-            tray.BalloonTipClicked += (_, _) => Diagnostics.Write("Windows balloon clicked");
-        }
         var menu = new System.Windows.Forms.ContextMenuStrip();
         menu.Items.Add("打开 VMNotify", null, (_, _) => Dispatcher.Invoke(ShowWindow));
         menu.Items.Add("退出", null, (_, _) => Dispatcher.InvokeAsync(async () => { quitting = true; await Stop(); Close(); }));
@@ -135,8 +131,7 @@ public partial class MainWindow : Window
                     if (ev.Message != null) message = ev.Message;
                     LastNotification.Text = $"{message}  ·  {DateTime.Now:HH:mm}";
                     Diagnostics.Write("Notification dequeued: " + ev.AppId);
-                    ShowNotification("VMNotify · " + ev.AppName, message);
-                    receiver.MarkDelivered(ev);
+                    if (ShowNotification("VMNotify · " + ev.AppName, message)) receiver.MarkDelivered(ev);
                 }
             }
         };
@@ -146,7 +141,8 @@ public partial class MainWindow : Window
         Closed += (_, _) => {
             updateLifetime.Cancel(); updateClient.Dispose();
             timer.Stop(); scrollIdle.Stop(); cancellation?.Cancel(); tray.Dispose(); trayIcon.Dispose();
-            if (!preview) SystemEvents.UserPreferenceChanged -= ThemeChanged;
+            desktopNotifications?.Dispose();
+            if (!preview) SystemTheme.Settings.ColorValuesChanged -= ThemeChanged;
             windowSource?.RemoveHook(WindowMessage);
         };
         if (preview) { Opacity = 0; ShowInTaskbar = false; }
@@ -210,14 +206,24 @@ public partial class MainWindow : Window
     private void ConnectionClicked(object sender, RoutedEventArgs e) => SelectPage(1);
     private void SettingsClicked(object sender, RoutedEventArgs e) => SelectPage(4);
     private void AppsClicked(object sender, RoutedEventArgs e) => SelectPage(2);
-    private void ShowNotification(string title, string text)
+    internal void InitializeNotifications()
     {
-        var result = SHQueryUserNotificationState(out var state);
-        Diagnostics.Write($"Requesting Windows balloon; visible={tray.Visible}; shellState={state}; result={result}");
-        tray.ShowBalloonTip(5000, title, text, System.Windows.Forms.ToolTipIcon.Info);
+        try {
+            desktopNotifications = new(() => Dispatcher.BeginInvoke(() => { if (!quitting) ShowWindow(); }));
+            if (!desktopNotifications.IsRegistered) LastNotification.Text = "Windows 通知注册失败，请查看诊断日志。";
+        } catch (Exception ex) {
+            Diagnostics.Write("Windows notifications unavailable: " + ex);
+            LastNotification.Text = "Windows 通知初始化失败：" + ex.Message;
+        }
     }
-    [DllImport("shell32.dll")]
-    private static extern int SHQueryUserNotificationState(out int state);
+    private bool ShowNotification(string title, string text)
+    {
+        if (previewMode) return false;
+        string? error = "Windows 通知尚未初始化。";
+        if (desktopNotifications != null && desktopNotifications.TryShow(title, text, out error)) return true;
+        LastNotification.Text = error;
+        return false;
+    }
     private void TestClicked(object sender, RoutedEventArgs e) => ShowNotification("VMNotify", "这是一条本机测试通知。虚拟机连接需单独验证。");
     private void BrowseKeyClicked(object sender, RoutedEventArgs e) { var dialog = new Microsoft.Win32.OpenFileDialog { Title = "选择 SSH 私钥", CheckFileExists = true }; if (dialog.ShowDialog(this) == true) IdentityInput.Text = dialog.FileName; }
     private async void ConnectClicked(object sender, RoutedEventArgs e) => await Connect();
@@ -366,7 +372,8 @@ public partial class MainWindow : Window
         RefreshStatus();
     }
 
-    private void ThemeChanged(object sender, UserPreferenceChangedEventArgs e) => Dispatcher.BeginInvoke(() => SystemTheme.Apply(this, SystemTheme.IsLight()));
+    private void ThemeChanged(Windows.UI.ViewManagement.UISettings sender, object args) =>
+        Dispatcher.BeginInvoke(() => { if (!quitting) SystemTheme.Apply(this, SystemTheme.IsLight()); });
     private IntPtr WindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         // Restart Manager uses session shutdown messages, even without logging off.

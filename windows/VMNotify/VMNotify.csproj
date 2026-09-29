@@ -1,6 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework>
+    <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <WindowsAppSDKRuntimeVersion>2.5.1</WindowsAppSDKRuntimeVersion>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
     <UseWindowsForms>true</UseWindowsForms><UseWPF>true</UseWPF><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
     <Version Condition="'$(Version)' == ''">$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\VERSION').Trim())</Version><ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>VMNotify</AssemblyName>
@@ -9,5 +14,21 @@
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../VMNotify.Core/VMNotify.Core.csproj" /></ItemGroup>
+  <ItemGroup><PackageReference Include="Microsoft.WindowsAppSDK.Foundation" Version="2.3.12" /></ItemGroup>
+  <ItemGroup><PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="2.1.9" /></ItemGroup>
+  <ItemGroup><PackageReference Include="Microsoft.WindowsAppSDK.Runtime" Version="$(WindowsAppSDKRuntimeVersion)" GeneratePathProperty="true" /></ItemGroup>
   <ItemGroup><Resource Include="Assets/VMNotify.ico" /></ItemGroup>
+  <!-- Foundation's component payload omits this required resource. Deploy the
+       unchanged, architecture-matched resource from Microsoft's runtime package. -->
+  <Target Name="IncludeNotificationRuntimeResource" BeforeTargets="AssignTargetPaths" DependsOnTargets="GetWindowsAppSDKNativePlatform">
+    <PropertyGroup>
+      <NotificationRuntimeFolder>$(IntermediateOutputPath)notification-runtime\$(WindowsAppSDKRuntimeVersion)\</NotificationRuntimeFolder>
+      <NotificationRuntimeResource>$(NotificationRuntimeFolder)Microsoft.WindowsAppRuntime.Insights.Resource.dll</NotificationRuntimeResource>
+    </PropertyGroup>
+    <Unzip SourceFiles="$(PkgMicrosoft_WindowsAppSDK_Runtime)\tools\MSIX\win10-$(NativePlatform)\Microsoft.WindowsAppRuntime.2.msix"
+           DestinationFolder="$(NotificationRuntimeFolder)" Condition="!Exists('$(NotificationRuntimeResource)')" />
+    <ItemGroup>
+      <Content Include="$(NotificationRuntimeResource)" Link="Microsoft.WindowsAppRuntime.Insights.Resource.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
 </Project>
